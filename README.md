@@ -51,7 +51,7 @@ npm ci
 npm run dev
 ```
 
-Vite serves the storefront at `http://localhost:5173`. The frontend uses the current host on port `5000` by default. To use a different API URL, set `VITE_API_URL` in the frontend environment (include the `/api` path).
+Vite serves the storefront at `http://localhost:5173`. The frontend uses the deployed Render API by default. To use a local API or another URL, set `VITE_API_URL` in the frontend environment (include the `/api` path), for example `http://localhost:5000/api`.
 
 To load the sample catalog, run this from the project root:
 
@@ -101,9 +101,9 @@ Deploy the backend on **Render** and the frontend on **Vercel**. Keep them as se
 
 1. Push the project to a Git repository after verifying that `.env` is ignored and no secrets are committed.
 2. In Render, create a Blueprint from the repository. The root [`render.yaml`](./render.yaml) configures the Node web service, production start command, and `/api/health` health check.
-3. Set the prompted `MONGODB_URI` to your MongoDB Atlas connection string using a database user with a strong password. Set `CORS_ORIGIN` to the exact deployed Vercel origin, for example `https://greenmarket.vercel.app` (no trailing slash). Render generates `JWT_SECRET`.
+3. Set the prompted `MONGODB_URI` to your MongoDB Atlas connection string using a database user with a strong password. Set `CORS_ORIGIN` to `https://greenmarket-livid.vercel.app` (no trailing slash). Render generates `JWT_SECRET`.
 4. In MongoDB Atlas, allow network access from the deployed Render service using the access policy appropriate for your plan.
-5. Wait for the Render service to become healthy and note its public URL, such as `https://greenmarket-api.onrender.com`.
+5. Wait for the Render service to become healthy at `https://greenmarket-api-2x85.onrender.com`.
 
 The API accepts `MONGODB_URI` and the legacy `MONGO_URI`. Never commit `.env` or paste production credentials into source code.
 
@@ -111,8 +111,8 @@ The API accepts `MONGODB_URI` and the legacy `MONGO_URI`. Never commit `.env` or
 
 1. Import the same repository as a Vercel project and set **Root Directory** to `ecommerce/frontend`.
 2. Use the Vite defaults: build command `npm run build`, output directory `dist`, install command `npm ci`.
-3. Add the environment variable `VITE_API_URL` with the Render API URL ending in `/api`, for example `https://greenmarket-api.onrender.com/api`.
-4. Deploy the frontend. Add its exact production origin to Render's `CORS_ORIGIN`, then redeploy the API if needed.
+3. Add the environment variable `VITE_API_URL` with `https://greenmarket-api-2x85.onrender.com/api`.
+4. Deploy the frontend at `https://greenmarket-livid.vercel.app`. The Render Blueprint already sets this origin in `CORS_ORIGIN`; redeploy the API after syncing Blueprint changes if needed.
 
 The [`ecommerce/frontend/vercel.json`](./ecommerce/frontend/vercel.json) file rewrites client-side routes to the Vite entry point so pages such as `/orders` and `/admin` work when opened directly.
 

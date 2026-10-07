@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const defaultApiUrl = `${window.location.protocol}//${window.location.hostname}:5000/api`;
+const defaultApiUrl = "https://greenmarket-api-2x85.onrender.com/api";
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || defaultApiUrl,
