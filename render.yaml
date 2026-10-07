@@ -3,6 +3,7 @@ services:
     name: greenmarket-api
     runtime: node
     plan: free
+    rootDir: ecommerce/backend
     buildCommand: npm ci
     startCommand: npm start
     healthCheckPath: /api/health

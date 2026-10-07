@@ -30,11 +30,12 @@ USSD hand-off is **not an online payment gateway**: the customer completes payme
 From the project root:
 
 ```powershell
+Set-Location ecommerce/backend
 npm ci
 Copy-Item .env.example .env
 ```
 
-Set `MONGO_URI` and a long, random `JWT_SECRET` in `.env`. Do not put real credentials in source files or commit `.env`.
+Set `MONGO_URI` to your MongoDB Atlas connection string and set a long, random `JWT_SECRET` in `ecommerce/backend/.env`. Replace the Atlas URI placeholders with your Atlas database user, cluster, and database. Do not put real credentials in source files or commit `.env`.
 
 Start the API:
 
@@ -42,19 +43,20 @@ Start the API:
 npm run dev
 ```
 
-The API listens on port `5000` by default. In a second terminal:
+The API listens on port `5000` by default. In a second terminal from the project root:
 
 ```powershell
-Set-Location frontend
+Set-Location ecommerce/frontend
 npm ci
 npm run dev
 ```
 
 Vite serves the storefront at `http://localhost:5173`. The frontend uses the current host on port `5000` by default. To use a different API URL, set `VITE_API_URL` in the frontend environment (include the `/api` path).
 
-To load the sample catalog, return to the project root and run:
+To load the sample catalog, run this from the project root:
 
 ```powershell
+Set-Location ecommerce/backend
 npm run seed
 ```
 
@@ -62,9 +64,10 @@ The seed command is safe to rerun; it does not overwrite existing products.
 
 ## Admin access
 
-Register the account you want to use in the storefront, then promote it from the project root:
+Register the account you want to use in the storefront, then promote it from `ecommerce/backend`:
 
 ```powershell
+Set-Location ecommerce/backend
 npm run make-admin -- admin@example.com
 ```
 
@@ -98,7 +101,7 @@ Deploy the backend on **Render** and the frontend on **Vercel**. Keep them as se
 
 1. Push the project to a Git repository after verifying that `.env` is ignored and no secrets are committed.
 2. In Render, create a Blueprint from the repository. The root [`render.yaml`](./render.yaml) configures the Node web service, production start command, and `/api/health` health check.
-3. Set the prompted `MONGO_URI` to the MongoDB connection string using a newly rotated database password. Set `CORS_ORIGIN` to the exact deployed Vercel origin, for example `https://greenmarket.vercel.app` (no trailing slash). Render generates `JWT_SECRET`.
+3. Set the prompted `MONGO_URI` to your MongoDB Atlas connection string using a database user with a strong password. Set `CORS_ORIGIN` to the exact deployed Vercel origin, for example `https://greenmarket.vercel.app` (no trailing slash). Render generates `JWT_SECRET`.
 4. In MongoDB Atlas, allow network access from the deployed Render service using the access policy appropriate for your plan.
 5. Wait for the Render service to become healthy and note its public URL, such as `https://greenmarket-api.onrender.com`.
 
@@ -106,12 +109,12 @@ The API expects the environment variable name `MONGO_URI` (not `MONGODB_URI`). N
 
 ### 2. Deploy the storefront to Vercel
 
-1. Import the same repository as a Vercel project and set **Root Directory** to `frontend`.
+1. Import the same repository as a Vercel project and set **Root Directory** to `ecommerce/frontend`.
 2. Use the Vite defaults: build command `npm run build`, output directory `dist`, install command `npm ci`.
 3. Add the environment variable `VITE_API_URL` with the Render API URL ending in `/api`, for example `https://greenmarket-api.onrender.com/api`.
 4. Deploy the frontend. Add its exact production origin to Render's `CORS_ORIGIN`, then redeploy the API if needed.
 
-The [`frontend/vercel.json`](./frontend/vercel.json) file rewrites client-side routes to the Vite entry point so pages such as `/orders` and `/admin` work when opened directly.
+The [`ecommerce/frontend/vercel.json`](./ecommerce/frontend/vercel.json) file rewrites client-side routes to the Vite entry point so pages such as `/orders` and `/admin` work when opened directly.
 
 ## Environment variables
 
