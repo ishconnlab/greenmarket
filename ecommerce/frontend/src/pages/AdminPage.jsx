@@ -1,9 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import api from "../api.js";
 import { apiErrorMessage } from "../utils/apiError.js";
 import { money } from "../utils/format.js";
 import { downloadAdminOrderReport } from "../utils/orderPdf.js";
 import { useLanguage } from "../context/LanguageContext.jsx";
+import BrandedLoader from "../components/BrandedLoader.jsx";
+import Pagination from "../components/Pagination.jsx";
+import { canTransitionOrderStatus } from "../utils/orderStatus.js";
 
 const emptyProduct = {
   slug: "",
@@ -14,6 +17,8 @@ const emptyProduct = {
   stock: "",
   imageUrl: "",
   imageAlt: "",
+  promotionLabel: "",
+  promotionColor: "green",
 };
 
 const emptyPromotion = {
@@ -32,6 +37,30 @@ const paymentLabels = {
   bank_of_kigali: "Bank of Kigali",
   not_recorded: "Not recorded",
 };
+
+function formatReportDate(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getReportDates(period, now = new Date()) {
+  if (period === "week") {
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+    const end = new Date(start);
+    end.setDate(end.getDate() + 6);
+    return { start: formatReportDate(start), end: formatReportDate(end) };
+  }
+  if (period === "month") {
+    return {
+      start: formatReportDate(new Date(now.getFullYear(), now.getMonth(), 1)),
+      end: formatReportDate(new Date(now.getFullYear(), now.getMonth() + 1, 0)),
+    };
+  }
+  return { start: "", end: "" };
+}
 
 function getPromotionThumbnail(promotion) {
   if (promotion.imageUrl) return promotion.imageUrl;
@@ -61,7 +90,16 @@ function AdminPage({ onProductsChanged }) {
   const [editingPromotionId, setEditingPromotionId] = useState("");
   const [savingPromotion, setSavingPromotion] = useState(false);
   const [productSearch, setProductSearch] = useState("");
+  const [productPage, setProductPage] = useState(1);
+  const [productPagination, setProductPagination] = useState({ page: 1, pageSize: 5, total: 0, totalPages: 0 });
+  const [productsLoading, setProductsLoading] = useState(false);
   const [orders, setOrders] = useState([]);
+  const [orderPage, setOrderPage] = useState(1);
+  const [orderPagination, setOrderPagination] = useState({ page: 1, pageSize: 10, total: 0, totalPages: 0 });
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [orderSummary, setOrderSummary] = useState({ openOrders: 0 });
+  const [reportSummary, setReportSummary] = useState({ count: 0, orderValue: 0, paidTotal: 0 });
+  const [reportLoading, setReportLoading] = useState(false);
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -71,8 +109,9 @@ function AdminPage({ onProductsChanged }) {
   const [saving, setSaving] = useState(false);
   const [busyOrder, setBusyOrder] = useState("");
   const [newActivity, setNewActivity] = useState([]);
-  const [reportStartDate, setReportStartDate] = useState("");
-  const [reportEndDate, setReportEndDate] = useState("");
+  const [reportPeriod, setReportPeriod] = useState("week");
+  const [reportStartDate, setReportStartDate] = useState(() => getReportDates("week").start);
+  const [reportEndDate, setReportEndDate] = useState(() => getReportDates("week").end);
   const [reportStatus, setReportStatus] = useState("all");
   const [exportingReport, setExportingReport] = useState(false);
   const [busyMessage, setBusyMessage] = useState("");
@@ -82,28 +121,16 @@ function AdminPage({ onProductsChanged }) {
   );
   const seenOrderIds = useRef(null);
   const seenMessageIds = useRef(null);
-  const filteredProducts = useMemo(() => {
-    const query = productSearch.trim().toLowerCase();
-    if (!query) return products;
-    return products.filter((product) =>
-      [product.name, product.category, product.slug]
-        .some((value) => value?.toLowerCase().includes(query))
-    );
-  }, [products, productSearch]);
-  const reportOrders = useMemo(() => {
-    const start = reportStartDate ? new Date(`${reportStartDate}T00:00:00`) : null;
-    const end = reportEndDate ? new Date(`${reportEndDate}T23:59:59.999`) : null;
-    return orders.filter((order) => {
-      const createdAt = new Date(order.createdAt);
-      return (!start || createdAt >= start)
-        && (!end || createdAt <= end)
-        && (reportStatus === "all" || order.status === reportStatus);
-    });
-  }, [orders, reportStartDate, reportEndDate, reportStatus]);
-  const reportPaidTotal = reportOrders
-    .filter((order) => order.paymentStatus === "paid")
-    .reduce((total, order) => total + order.total, 0);
-  const reportOrderValue = reportOrders.reduce((total, order) => total + order.total, 0);
+  const orderPageRef = useRef(orderPage);
+  const productSearchInitialized = useRef(false);
+  const productRequestId = useRef(0);
+  orderPageRef.current = orderPage;
+  const reportOrdersCount = reportSummary.count;
+  const reportPaidTotal = reportSummary.paidTotal;
+  const reportOrderValue = reportSummary.orderValue;
+  const pendingStoreCount = stores.filter((store) => store.status === "pending").length;
+  const openOrderCount = orderSummary.openOrders;
+  const awaitingMessageCount = messages.filter((message) => !message.reply).length;
 
   useEffect(() => {
     loadDashboard();
@@ -116,17 +143,86 @@ function AdminPage({ onProductsChanged }) {
     return () => window.clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    if (!productSearchInitialized.current) {
+      productSearchInitialized.current = true;
+      return undefined;
+    }
+    const timeout = window.setTimeout(() => {
+      setProductPage(1);
+      void loadProductsPage(1, productSearch);
+    }, 300);
+    return () => window.clearTimeout(timeout);
+  }, [productSearch]);
+
+  useEffect(() => {
+    let active = true;
+    const timeout = window.setTimeout(async () => {
+      setReportLoading(true);
+      try {
+        const { data } = await api.get("/admin/orders/report-summary", {
+          params: {
+            startDate: reportStartDate || undefined,
+            endDate: reportEndDate || undefined,
+            status: reportStatus,
+          },
+        });
+        if (active) setReportSummary(data.summary);
+      } catch (requestError) {
+        if (active) setError(apiErrorMessage(requestError, "Could not load the order report summary."));
+      } finally {
+        if (active) setReportLoading(false);
+      }
+    }, 250);
+    return () => {
+      active = false;
+      window.clearTimeout(timeout);
+    };
+  }, [reportStartDate, reportEndDate, reportStatus]);
+
+  async function loadProductsPage(page = productPage, search = productSearch) {
+    const requestId = ++productRequestId.current;
+    setProductsLoading(true);
+    try {
+      const { data } = await api.get("/admin/products", {
+        params: { page, search: search.trim() || undefined },
+      });
+      if (requestId !== productRequestId.current) return;
+      setProducts(data.products);
+      setProductPagination(data.pagination);
+      setProductPage(data.pagination.page);
+    } catch (requestError) {
+      if (requestId === productRequestId.current) {
+        setError(apiErrorMessage(requestError, "Could not load products."));
+      }
+    } finally {
+      if (requestId === productRequestId.current) setProductsLoading(false);
+    }
+  }
+
+  async function loadOrdersPage(page = orderPage) {
+    setOrdersLoading(true);
+    try {
+      const { data } = await api.get("/admin/orders", { params: { page } });
+      setOrders(data.orders);
+      setOrderPagination(data.pagination);
+      setOrderPage(data.pagination.page);
+    } catch (requestError) {
+      setError(apiErrorMessage(requestError, "Could not load orders."));
+    } finally {
+      setOrdersLoading(false);
+    }
+  }
+
   async function refreshOrders(notifyNew = false) {
     try {
-      const { data } = await api.get("/admin/orders");
-      const orders = data.orders;
-      setOrders(orders);
-      const currentIds = new Set(orders.map((order) => order._id));
+      const { data: newestPage } = await api.get("/admin/orders", { params: { page: 1 } });
+      const currentIds = new Set(newestPage.orders.map((order) => order._id));
       if (seenOrderIds.current === null) {
         seenOrderIds.current = currentIds;
       } else {
         const arrived = notifyNew
-          ? orders.filter((order) => !seenOrderIds.current.has(order._id))
+          ? newestPage.orders.filter((order) => !seenOrderIds.current.has(order._id))
           : [];
         if (arrived.length) {
           setNewActivity((current) => [
@@ -142,6 +238,19 @@ function AdminPage({ onProductsChanged }) {
           }
         }
         seenOrderIds.current = new Set([...seenOrderIds.current, ...currentIds]);
+      }
+      if (orderPageRef.current === 1) {
+        setOrders(newestPage.orders);
+        setOrderPagination(newestPage.pagination);
+        setOrderPage(newestPage.pagination.page);
+      } else {
+        const { data: visiblePage } = await api.get("/admin/orders", {
+          params: { page: orderPageRef.current },
+        });
+        setOrders(visiblePage.orders);
+        setOrderPagination(visiblePage.pagination);
+        setOrderPage(visiblePage.pagination.page);
+        orderPageRef.current = visiblePage.pagination.page;
       }
     } catch (requestError) {
       setError(apiErrorMessage(requestError, "Could not check for new orders."));
@@ -178,20 +287,35 @@ function AdminPage({ onProductsChanged }) {
     }
   }
 
-  async function loadDashboard() {
+  async function loadDashboard({
+    productPageOverride = productPage,
+    productSearchOverride = productSearch,
+    orderPageOverride = orderPage,
+  } = {}) {
     setLoading(true);
     setError("");
+    productRequestId.current += 1;
+    setProductsLoading(false);
     try {
-      const [productResponse, orderResponse, messageResponse, promotionResponse, storeResponse] = await Promise.all([
-        api.get("/products"),
-        api.get("/admin/orders"),
+      const [productResponse, orderResponse, messageResponse, promotionResponse, storeResponse, summaryResponse] = await Promise.all([
+        api.get("/admin/products", { params: { page: productPageOverride, search: productSearchOverride.trim() || undefined } }),
+        api.get("/admin/orders", { params: { page: orderPageOverride } }),
         api.get("/admin/messages"),
         api.get("/admin/promotions"),
         api.get("/admin/stores"),
+        api.get("/admin/orders/report-summary", { params: { status: "all" } }),
       ]);
       setProducts(productResponse.data.products);
+      setProductPagination(productResponse.data.pagination);
+      setProductPage(productResponse.data.pagination.page);
       setOrders(orderResponse.data.orders);
-      seenOrderIds.current = new Set(orderResponse.data.orders.map((order) => order._id));
+      setOrderPagination(orderResponse.data.pagination);
+      setOrderPage(orderResponse.data.pagination.page);
+      orderPageRef.current = orderResponse.data.pagination.page;
+      if (orderResponse.data.pagination.page === 1) {
+        seenOrderIds.current = new Set(orderResponse.data.orders.map((order) => order._id));
+      }
+      setOrderSummary(summaryResponse.data.summary);
       setMessages(messageResponse.data.messages);
       seenMessageIds.current = new Set(messageResponse.data.messages.map((message) => message._id));
       setPromotions(promotionResponse.data.promotions);
@@ -230,6 +354,8 @@ function AdminPage({ onProductsChanged }) {
       stock: product.stock,
       imageUrl: product.imageUrl || "",
       imageAlt: product.imageAlt || "",
+      promotionLabel: product.promotionLabel || "",
+      promotionColor: product.promotionColor || "green",
     });
     document.getElementById("product-editor")?.scrollIntoView({ behavior: "smooth" });
   }
@@ -250,6 +376,7 @@ function AdminPage({ onProductsChanged }) {
       price: Number(draft.price),
       stock: Number(draft.stock),
     };
+    const creatingProduct = !editingId;
     try {
       if (editingId) {
         await api.put(`/products/${editingId}`, product);
@@ -259,7 +386,14 @@ function AdminPage({ onProductsChanged }) {
         setNotice(t("Product added."));
       }
       cancelEditing();
-      await Promise.all([loadDashboard(), onProductsChanged()]);
+      if (creatingProduct) setProductSearch("");
+      await Promise.all([
+        loadDashboard({
+          productPageOverride: 1,
+          productSearchOverride: creatingProduct ? "" : productSearch,
+        }),
+        onProductsChanged(),
+      ]);
     } catch (requestError) {
       setError(apiErrorMessage(requestError, "Could not save this product."));
     } finally {
@@ -397,12 +531,20 @@ function AdminPage({ onProductsChanged }) {
     setExportingReport(true);
     setError("");
     try {
-      await downloadAdminOrderReport(reportOrders, {
+      const { data } = await api.get("/admin/orders/report", {
+        params: {
+          startDate: reportStartDate || undefined,
+          endDate: reportEndDate || undefined,
+          status: reportStatus,
+        },
+      });
+      await downloadAdminOrderReport(data.orders, {
         startDate: reportStartDate,
         endDate: reportEndDate,
         status: reportStatus,
+        period: reportPeriod,
       });
-      setNotice(t("Exported a report for {count} orders.", { count: reportOrders.length }));
+      setNotice(t("Exported a report for {count} orders.", { count: data.orders.length }));
     } catch (requestError) {
       console.error("Could not export order report:", requestError);
       setError(t("Could not create the order report PDF. Please try again."));
@@ -464,9 +606,38 @@ function AdminPage({ onProductsChanged }) {
     }
   }
 
+  function changeReportPeriod(period) {
+    setReportPeriod(period);
+    if (period === "custom") return;
+    const dates = getReportDates(period);
+    setReportStartDate(dates.start);
+    setReportEndDate(dates.end);
+  }
+
   return (
-    <main className="admin-page">
-      <div className="admin-heading">
+    <div className="admin-layout">
+      <aside className="admin-sidebar" aria-label={t("Admin navigation")}>
+        <div className="admin-sidebar-brand">
+          <span className="admin-sidebar-mark" aria-hidden="true">g</span>
+          <span><strong>GREEN MARKET</strong><small>{t("Admin dashboard")}</small></span>
+        </div>
+        <span className="admin-sidebar-label">{t("Management")}</span>
+        <nav className="admin-sidebar-nav">
+          <a href="#admin-overview"><span className="admin-nav-icon" aria-hidden="true">⌂</span>{t("Overview")}</a>
+          <a href="#store-management"><span className="admin-nav-icon" aria-hidden="true">▦</span>{t("Stores")}<span className="admin-nav-count">{pendingStoreCount}</span></a>
+          <a href="#promotion-editor"><span className="admin-nav-icon" aria-hidden="true">↗</span>{t("Promotions")}</a>
+          <a href="#product-editor"><span className="admin-nav-icon" aria-hidden="true">□</span>{t("Products")}<span className="admin-nav-count">{productPagination.total}</span></a>
+          <a href="#customer-messages"><span className="admin-nav-icon" aria-hidden="true">✉</span>{t("Messages")}<span className="admin-nav-count">{awaitingMessageCount}</span></a>
+          <a href="#order-reports"><span className="admin-nav-icon" aria-hidden="true">▤</span>{t("Reports")}</a>
+          <a href="#order-management"><span className="admin-nav-icon" aria-hidden="true">≡</span>{t("Orders")}<span className="admin-nav-count">{openOrderCount}</span></a>
+        </nav>
+        <div className="admin-sidebar-footnote">
+          <span className="admin-live-dot" aria-hidden="true" />
+          <span>{t("Store systems are ready")}</span>
+        </div>
+      </aside>
+      <main className="admin-page">
+      <div className="admin-heading" id="admin-overview">
         <div>
           <span className="eyebrow muted-eyebrow">{t("STORE MANAGEMENT")}</span>
           <h1>{t("Admin dashboard")}</h1>
@@ -497,11 +668,20 @@ function AdminPage({ onProductsChanged }) {
         </div>
       )}
 
+      {!loading && (
+        <section className="admin-overview" aria-label={t("Quick overview")}>
+          <div><span>{t("Products")}</span><strong>{productPagination.total}</strong><small>{t("in catalog")}</small></div>
+          <div><span>{t("Open orders")}</span><strong>{openOrderCount}</strong><small>{t("need fulfilment")}</small></div>
+          <div><span>{t("Stores awaiting review")}</span><strong>{pendingStoreCount}</strong><small>{t("awaiting review")}</small></div>
+          <div><span>{t("Messages")}</span><strong>{awaitingMessageCount}</strong><small>{t("awaiting reply")}</small></div>
+        </section>
+      )}
+
       {loading ? (
-        <div className="empty-state">{t("Loading store management...")}</div>
+        <BrandedLoader label={t("Loading store management...")} />
       ) : (
         <>
-          <section className="admin-section">
+          <section className="admin-section" id="store-management">
             <div className="admin-section-heading">
               <div><span className="eyebrow muted-eyebrow">{t("MARKETPLACE")}</span><h2>{t("Standalone store requests")}</h2></div>
               <span>{stores.filter((store) => store.status === "pending").length} {t("awaiting review")} · {stores.length} {t("stores")}</span>
@@ -653,7 +833,7 @@ function AdminPage({ onProductsChanged }) {
                 <span className="eyebrow muted-eyebrow">{t("CATALOG")}</span>
                 <h2>{t(editingId ? "Update product" : "Add a product")}</h2>
               </div>
-              <span>{products.length} {t("products")}</span>
+              <span>{productPagination.total} {t("products")}</span>
             </div>
             <form className="admin-product-form" onSubmit={saveProduct}>
               <label>
@@ -733,6 +913,28 @@ function AdminPage({ onProductsChanged }) {
                   maxLength={140}
                 />
               </label>
+              <label>
+                {t("Promotion badge")}
+                <input
+                  value={draft.promotionLabel}
+                  onChange={(event) => setDraft({ ...draft, promotionLabel: event.target.value })}
+                  maxLength={36}
+                  placeholder={t("e.g. Special offer")}
+                />
+                <span className="admin-field-hint">{t("Leave blank to hide the badge on the product card.")}</span>
+              </label>
+              <label>
+                {t("Badge color")}
+                <select
+                  value={draft.promotionColor}
+                  onChange={(event) => setDraft({ ...draft, promotionColor: event.target.value })}
+                >
+                  <option value="green">{t("Green")}</option>
+                  <option value="coral">{t("Coral")}</option>
+                  <option value="gold">{t("Gold")}</option>
+                  <option value="blue">{t("Blue")}</option>
+                </select>
+              </label>
               <div className="admin-form-actions admin-field-wide">
                 <button className="primary-button" disabled={saving}>
                   {saving ? t("Saving...") : editingId ? t("Save changes") : t("Add product")}
@@ -754,8 +956,10 @@ function AdminPage({ onProductsChanged }) {
                 placeholder={t("Search by product name, category, or slug")}
               />
             </label>
-            <div className="admin-product-list">
-              {filteredProducts.map((product) => (
+            {productsLoading ? (
+              <BrandedLoader label={t("Loading products...")} />
+            ) : <div className="admin-product-list">
+              {products.map((product) => (
                 <article className="admin-product-row" key={product._id}>
                   {product.imageUrl ? (
                     <img src={product.imageUrl} alt={product.imageAlt || product.name} loading="lazy" />
@@ -772,11 +976,14 @@ function AdminPage({ onProductsChanged }) {
                   </div>
                 </article>
               ))}
-              {products.length > 0 && !filteredProducts.length && (
-                <div className="empty-state">{t("No products match “{query}”. Try another search.", { query: productSearch })}</div>
-              )}
-              {!products.length && <div className="empty-state">{t("No products yet. Add your first one above.")}</div>}
-            </div>
+              {!products.length && <div className="empty-state">{productSearch ? t("No products match “{query}”. Try another search.", { query: productSearch }) : t("No products yet. Add your first one above.")}</div>}
+            </div>}
+            <Pagination
+              page={productPagination.page}
+              totalPages={productPagination.totalPages}
+              total={productPagination.total}
+              onPageChange={(page) => loadProductsPage(page, productSearch)}
+            />
           </section>
 
           <section className="admin-section" id="customer-messages">
@@ -834,22 +1041,45 @@ function AdminPage({ onProductsChanged }) {
             )}
           </section>
 
-          <section className="admin-section">
+          <section className="admin-section" id="order-reports">
             <div className="admin-section-heading">
               <div>
                 <span className="eyebrow muted-eyebrow">{t("BUSINESS OVERVIEW")}</span>
                 <h2>{t("Order reports")}</h2>
               </div>
-              <span>{reportOrders.length} {t("matching orders")}</span>
+              <span>{reportLoading ? t("Loading report...") : `${reportOrdersCount} ${t("matching orders")}`}</span>
             </div>
             <div className="report-filters">
               <label>
+                {t("Report period")}
+                <select value={reportPeriod} onChange={(event) => changeReportPeriod(event.target.value)}>
+                  <option value="week">{t("This week")}</option>
+                  <option value="month">{t("This month")}</option>
+                  <option value="custom">{t("Custom range")}</option>
+                  <option value="all">{t("All time")}</option>
+                </select>
+              </label>
+              <label>
                 {t("From")}
-                <input type="date" value={reportStartDate} onChange={(event) => setReportStartDate(event.target.value)} />
+                <input
+                  type="date"
+                  value={reportStartDate}
+                  onChange={(event) => {
+                    setReportPeriod("custom");
+                    setReportStartDate(event.target.value);
+                  }}
+                />
               </label>
               <label>
                 {t("To")}
-                <input type="date" value={reportEndDate} onChange={(event) => setReportEndDate(event.target.value)} />
+                <input
+                  type="date"
+                  value={reportEndDate}
+                  onChange={(event) => {
+                    setReportPeriod("custom");
+                    setReportEndDate(event.target.value);
+                  }}
+                />
               </label>
               <label>
                 {t("Order status")}
@@ -863,22 +1093,22 @@ function AdminPage({ onProductsChanged }) {
               </button>
             </div>
             <div className="report-summary" aria-live="polite">
-              <div><span>{t("Matching orders")}</span><strong>{reportOrders.length}</strong></div>
+              <div><span>{t("Matching orders")}</span><strong>{reportLoading ? "…" : reportOrdersCount}</strong></div>
               <div><span>{t("Order value")}</span><strong>{money(reportOrderValue)}</strong></div>
               <div><span>{t("Confirmed paid")}</span><strong>{money(reportPaidTotal)}</strong></div>
             </div>
             <p className="report-privacy-note">The PDF includes customer, item, fulfilment, payment, and date details. Its QR code links back to the admin dashboard.</p>
           </section>
 
-          <section className="admin-section">
+          <section className="admin-section" id="order-management">
             <div className="admin-section-heading">
               <div>
                 <span className="eyebrow muted-eyebrow">{t("FULFILMENT")}</span>
                 <h2>{t("All orders")}</h2>
               </div>
-              <span>{orders.length} {t("orders")}</span>
+              <span>{orderPagination.total} {t("orders")}</span>
             </div>
-            {!orders.length ? (
+            {ordersLoading ? <BrandedLoader label={t("Loading orders...")} /> : !orders.length ? (
               <div className="empty-state">{t("No orders have been placed yet.")}</div>
             ) : (
               <div className="admin-order-list">
@@ -897,7 +1127,7 @@ function AdminPage({ onProductsChanged }) {
                           onChange={(event) => updateStatus(order, event.target.value)}
                         >
                           {statuses.map((status) => (
-                            <option key={status} value={status}>{t(status)}</option>
+                            <option key={status} value={status} disabled={!canTransitionOrderStatus(order.status, status)}>{t(status)}</option>
                           ))}
                         </select>
                       </label>
@@ -913,10 +1143,10 @@ function AdminPage({ onProductsChanged }) {
                         {t("Confirmation")}
                         <select
                           value={order.paymentStatus || "awaiting_confirmation"}
-                          disabled={busyOrder === order._id}
+                          disabled={busyOrder === order._id || order.status === "cancelled"}
                           onChange={(event) => updatePaymentStatus(order, event.target.value)}
                         >
-                          <option value="awaiting_confirmation">{t("Awaiting confirmation")}</option>
+                          <option value="awaiting_confirmation" disabled={order.paymentStatus === "paid"}>{t("Awaiting confirmation")}</option>
                           <option value="paid">{t("Paid")}</option>
                         </select>
                       </label>
@@ -935,10 +1165,17 @@ function AdminPage({ onProductsChanged }) {
                 ))}
               </div>
             )}
+            <Pagination
+              page={orderPagination.page}
+              totalPages={orderPagination.totalPages}
+              total={orderPagination.total}
+              onPageChange={loadOrdersPage}
+            />
           </section>
         </>
       )}
-    </main>
+      </main>
+    </div>
   );
 }
 

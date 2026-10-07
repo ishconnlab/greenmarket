@@ -1,6 +1,22 @@
 {
   "rewrites": [
     {
+      "source": "/store/:slug/manifest.webmanifest",
+      "destination": "https://greenmarket-api-2x85.onrender.com/share/stores/:slug/manifest.webmanifest"
+    },
+    {
+      "source": "/store/:slug/app-icon.svg",
+      "destination": "https://greenmarket-api-2x85.onrender.com/share/stores/:slug/app-icon.svg"
+    },
+    {
+      "source": "/sitemap.xml",
+      "destination": "https://greenmarket-api-2x85.onrender.com/share/sitemap.xml"
+    },
+    {
+      "source": "/products/:id",
+      "destination": "https://greenmarket-api-2x85.onrender.com/share/products/:id"
+    },
+    {
       "source": "/share/products/:id",
       "destination": "https://greenmarket-api-2x85.onrender.com/share/products/:id"
     },

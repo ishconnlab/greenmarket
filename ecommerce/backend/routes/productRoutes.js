@@ -7,6 +7,7 @@ import requireAuth from "./authMiddleware.js";
 import requireAdmin from "./adminMiddleware.js";
 
 const router = express.Router();
+const PAGE_SIZE = 5;
 const allowedFields = [
   "slug",
   "name",
@@ -16,6 +17,8 @@ const allowedFields = [
   "stock",
   "imageUrl",
   "imageAlt",
+  "promotionLabel",
+  "promotionColor",
 ];
 
 function getProductInput(body) {
@@ -60,8 +63,36 @@ router.get("/products", async (req, res) => {
         { store: { $exists: false } },
         { store: { $in: activeStores.map((store) => store._id) } },
       ],
-    }).populate("store", "name slug");
+    }).populate("store", "name slug").sort({ createdAt: -1 });
     return res.status(200).json({ products });
+  } catch (error) {
+    return respondWithDatabaseError(res, error);
+  }
+});
+
+router.get("/admin/products", requireAuth, requireAdmin, async (req, res) => {
+  const requestedPage = Number.parseInt(req.query.page, 10);
+  const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+  const search = typeof req.query.search === "string" ? req.query.search.trim().slice(0, 100) : "";
+  const filter = search
+    ? { $or: ["name", "category", "slug"].map((field) => ({
+      [field]: { $regex: search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" },
+    })) }
+    : {};
+  try {
+    const total = await Product.countDocuments(filter);
+    const totalPages = Math.ceil(total / PAGE_SIZE);
+    const safePage = totalPages ? Math.min(page, totalPages) : 1;
+    const products = await Product.find(filter)
+      .populate("store", "name slug")
+      .sort({ createdAt: -1, _id: -1 })
+      .skip((safePage - 1) * PAGE_SIZE)
+      .limit(PAGE_SIZE)
+      .lean();
+    return res.status(200).json({
+      products,
+      pagination: { page: safePage, pageSize: PAGE_SIZE, total, totalPages },
+    });
   } catch (error) {
     return respondWithDatabaseError(res, error);
   }

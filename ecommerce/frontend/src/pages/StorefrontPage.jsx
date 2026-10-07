@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import api from "../api.js";
 import ProductCard from "../components/ProductCard.jsx";
+import BrandedLoader from "../components/BrandedLoader.jsx";
 import { useLanguage } from "../context/LanguageContext.jsx";
 import { apiErrorMessage } from "../utils/apiError.js";
 
@@ -46,7 +47,7 @@ function StorefrontPage({ onStoreLoaded, onAddToCart }) {
   }, [slug, onStoreLoaded]);
 
   if (loading) {
-    return <main className="storefront-page"><div className="empty-state">{t("Loading store...")}</div></main>;
+    return <main className="storefront-page"><BrandedLoader label={t("Loading store...")} /></main>;
   }
   if (error || !store) {
     return (

@@ -5,6 +5,7 @@ import { apiErrorMessage } from "../utils/apiError.js";
 import { money } from "../utils/format.js";
 import { useLanguage } from "../context/LanguageContext.jsx";
 import { downloadOrderReceipt } from "../utils/orderPdf.js";
+import BrandedLoader from "../components/BrandedLoader.jsx";
 import {
   disableOrderNotifications,
   enableOrderNotifications,
@@ -170,7 +171,7 @@ function OrdersPage({ user, onSignIn }) {
           </section>
 
           {loading ? (
-            <div className="empty-state">{t("Loading your orders...")}</div>
+            <BrandedLoader label={t("Loading your orders...")} />
           ) : error ? (
             <div className="empty-state" role="alert">{error}</div>
           ) : !orders.length ? (

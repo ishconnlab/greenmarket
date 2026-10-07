@@ -115,7 +115,7 @@ export async function downloadOrderReceipt(order) {
   document.save(`green-market-order-${orderCode(order)}.pdf`);
 }
 
-export async function downloadAdminOrderReport(orders, { startDate, endDate, status }) {
+export async function downloadAdminOrderReport(orders, { startDate, endDate, status, period = "custom" }) {
   const [{ jsPDF }, { default: QRCode }] = await Promise.all([
     import("jspdf"),
     import("qrcode"),
@@ -140,7 +140,7 @@ export async function downloadAdminOrderReport(orders, { startDate, endDate, sta
   document.setTextColor(88, 102, 92);
   document.text(`Generated: ${generated}`, 14, 26);
   document.text(
-    `Period: ${startDate || "All dates"} to ${endDate || "Present"} · Status: ${status === "all" ? "All statuses" : orderStatusLabel(status)}`,
+    `Report period: ${{ week: "This week", month: "This month", custom: "Custom range", all: "All time" }[period] || "Custom range"} · ${startDate || "All dates"} to ${endDate || "Present"} · Status: ${status === "all" ? "All statuses" : orderStatusLabel(status)}`,
     14,
     32
   );
@@ -204,6 +204,6 @@ export async function downloadAdminOrderReport(orders, { startDate, endDate, sta
   }
 
   addPageNumbers(document);
-  const dateStamp = new Date().toISOString().slice(0, 10);
-  document.save(`green-market-order-report-${dateStamp}.pdf`);
+  const safePeriod = period.replace(/[^a-z0-9-]/gi, "-");
+  document.save(`green-market-${safePeriod}-order-report-${startDate || "all"}-to-${endDate || "time"}.pdf`);
 }

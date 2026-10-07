@@ -2,13 +2,26 @@ import mongoose from "mongoose";
 import Order from "../models/Order.js";
 import Product from "../models/Product.js";
 
+const orderStatusTransitions = {
+  pending: ["processing", "cancelled"],
+  processing: ["shipped", "cancelled"],
+  shipped: ["delivered"],
+  delivered: [],
+  cancelled: [],
+};
+
+export function canTransitionOrderStatus(currentStatus, nextStatus) {
+  return currentStatus === nextStatus
+    || orderStatusTransitions[currentStatus]?.includes(nextStatus) === true;
+}
+
 export async function cancelOrderAndRestoreStock({
   orderId,
   expectedStatus,
-  paymentStatus,
-  paymentConfirmedAt,
   storeId,
 }) {
+  if (!["pending", "processing"].includes(expectedStatus)) return null;
+
   const session = await mongoose.startSession();
   let order = null;
   try {
@@ -21,14 +34,6 @@ export async function cancelOrderAndRestoreStock({
         {
           $set: {
             status: "cancelled",
-            ...(paymentStatus !== undefined
-              ? {
-                  paymentStatus,
-                  paymentConfirmedAt: paymentStatus === "paid"
-                    ? paymentConfirmedAt || new Date()
-                    : null,
-                }
-              : {}),
           },
         },
         { new: true, session }

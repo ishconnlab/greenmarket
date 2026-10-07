@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import api from "../api.js";
 import { useLanguage } from "../context/LanguageContext.jsx";
@@ -27,6 +27,12 @@ const initialMarketStories = [
   },
 ];
 
+function getStoreThemeColor(slug) {
+  const colors = ["#176b45", "#295d79", "#8f5537", "#70528a", "#9a6734"];
+  const hash = [...slug].reduce((value, character) => (value * 31 + character.charCodeAt(0)) >>> 0, 7);
+  return colors[hash % colors.length];
+}
+
 function getYouTubeThumbnail(mediaUrl) {
   if (!mediaUrl) return "";
   try {
@@ -44,22 +50,23 @@ function getYouTubeThumbnail(mediaUrl) {
   }
 }
 
-function Header({ user, isAdmin, isSeller, cartCount, onOpenCart, onSignIn, onSignOut }) {
+function Header({ user, isAdmin, isSeller, store, cartCount, onOpenCart, onSignIn, onSignOut }) {
   const { language, setLanguage, t } = useLanguage();
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
+  const storeSlug = pathname.match(/^\/store\/([^/]+)/)?.[1] || "";
+  const showingStore = Boolean(store && store.slug === storeSlug);
   const showMarketTicker = pathname !== "/admin";
   const [installPrompt, setInstallPrompt] = useState(null);
   const [installStatus, setInstallStatus] = useState("");
-  const [isInstalled, setIsInstalled] = useState(() => (
-    typeof window !== "undefined"
-    && (window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true)
-  ));
+  const installScope = useRef("");
+  const [isInstalled, setIsInstalled] = useState(false);
   const [promotions, setPromotions] = useState(initialMarketStories);
   const [promotionRequestFailed, setPromotionRequestFailed] = useState(false);
 
   useEffect(() => {
     const captureInstallPrompt = (event) => {
       event.preventDefault();
+      installScope.current = window.location.pathname.match(/^\/store\/([^/]+)/)?.[1] || "";
       setInstallPrompt(event);
     };
     const markInstalled = () => {
@@ -74,6 +81,46 @@ function Header({ user, isAdmin, isSeller, cartCount, onOpenCart, onSignIn, onSi
       window.removeEventListener("appinstalled", markInstalled);
     };
   }, [t]);
+
+  useEffect(() => {
+    const manifest = document.querySelector('link[rel="manifest"]');
+    const icon = document.querySelector('link[rel="icon"]');
+    const appleIcon = document.querySelector('link[rel="apple-touch-icon"]');
+    const themeColor = document.querySelector('meta[name="theme-color"]');
+    const appleTitle = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+    if (!manifest || !icon || !appleIcon || !themeColor) return undefined;
+
+    const original = {
+      manifest: manifest.getAttribute("href"),
+      icon: icon.getAttribute("href"),
+      appleIcon: appleIcon.getAttribute("href"),
+      themeColor: themeColor.content,
+      appleTitle: appleTitle?.content,
+    };
+    if (showingStore) {
+      const storeBase = `/store/${encodeURIComponent(store.slug)}`;
+      const storeIcon = `${storeBase}/app-icon.svg`;
+      manifest.href = `${storeBase}/manifest.webmanifest`;
+      icon.href = storeIcon;
+      appleIcon.href = "/icons/icon-180.png";
+      themeColor.content = getStoreThemeColor(store.slug);
+      if (appleTitle) appleTitle.content = store.name.slice(0, 16);
+    }
+    const launchedAsStoreApp = showingStore && new URLSearchParams(search).get("source") === "store-pwa";
+    const standalone = window.matchMedia("(display-mode: standalone)").matches
+      || window.navigator.standalone === true;
+    setIsInstalled(Boolean(launchedAsStoreApp || (standalone && !showingStore)));
+    if (installPrompt && (installScope.current || "") !== (showingStore ? store.slug : "")) {
+      setInstallPrompt(null);
+    }
+    return () => {
+      manifest.href = original.manifest || "/manifest.webmanifest";
+      icon.href = original.icon || "/favicon.svg";
+      appleIcon.href = original.appleIcon || "/icons/icon-180.png";
+      themeColor.content = original.themeColor || "#176b45";
+      if (appleTitle && original.appleTitle) appleTitle.content = original.appleTitle;
+    };
+  }, [installPrompt, search, showingStore, store?.slug]);
 
   useEffect(() => {
     let active = true;
@@ -145,11 +192,21 @@ function Header({ user, isAdmin, isSeller, cartCount, onOpenCart, onSignIn, onSi
   });
 
   async function installApp() {
-    if (!installPrompt) return;
+    const correctInstallPrompt = installPrompt
+      && (installScope.current || "") === (showingStore ? store.slug : "");
+    if (!correctInstallPrompt) {
+      setInstallStatus(showingStore
+        ? t("Use your browser menu to install the {store} app.", { store: store.name })
+        : t("Use your browser menu to install Green Market."));
+      return;
+    }
     try {
       await installPrompt.prompt();
-      await installPrompt.userChoice;
+      const choice = await installPrompt.userChoice;
       setInstallPrompt(null);
+      if (choice.outcome === "accepted" && showingStore) {
+        installScope.current = store.slug;
+      }
     } catch (error) {
       console.error("Could not start Green Market installation:", error);
       setInstallStatus(t("Could not start installation. Use your browser menu to install the app."));
@@ -159,10 +216,12 @@ function Header({ user, isAdmin, isSeller, cartCount, onOpenCart, onSignIn, onSi
 
   return (
     <header className="site-header">
-      <div className={`topbar${user ? " topbar-authenticated" : ""}${installPrompt && !isInstalled ? " topbar-installable" : ""}`}>
-        <Link className="brand" to="/" aria-label="Green Market home">
-          <span className="brand-mark">g</span>
-          <span>green<span className="brand-light">market</span></span>
+      <div className={`topbar${user ? " topbar-authenticated" : ""}${(showingStore || installPrompt) && !isInstalled ? " topbar-installable" : ""}`}>
+        <Link className="brand" to={showingStore ? `/store/${store.slug}` : "/"} aria-label={showingStore ? store.name : "Green Market home"}>
+          {showingStore && store.logoUrl
+            ? <img className="header-store-logo" src={store.logoUrl} alt="" />
+            : <span className="brand-mark">{showingStore ? store.name.trim().charAt(0).toUpperCase() : "g"}</span>}
+          <span>{showingStore ? store.name : <>green<span className="brand-light">market</span></>}</span>
         </Link>
         <nav className="header-actions" aria-label="Main navigation">
           <NavLink className="text-button nav-link" to="/" end>{t("Shop")}</NavLink>
@@ -188,9 +247,9 @@ function Header({ user, isAdmin, isSeller, cartCount, onOpenCart, onSignIn, onSi
           ) : (
             <button className="text-button" onClick={onSignIn}>{t("Sign in")}</button>
           )}
-          {installPrompt && !isInstalled && (
+          {(showingStore || installPrompt) && !isInstalled && (
             <button className="install-app-button" onClick={installApp}>
-              <span aria-hidden="true">↓</span> {t("Install app")}
+              <span aria-hidden="true">↓</span> {t(showingStore ? "Install {store}" : "Install app", { store: store?.name })}
             </button>
           )}
           <button

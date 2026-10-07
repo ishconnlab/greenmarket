@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import api from "../api.js";
 import { apiErrorMessage } from "../utils/apiError.js";
 import { useLanguage } from "../context/LanguageContext.jsx";
+import BrandedLoader from "../components/BrandedLoader.jsx";
 
 const messageTypes = [
   ["message", "General message"],
@@ -149,7 +150,7 @@ function ProfilePage({ user, onSignIn, onSignOut }) {
               <span>{messages.length} {t("messages")}</span>
             </div>
             {loading ? (
-              <p className="profile-empty">{t("Loading your messages...")}</p>
+              <BrandedLoader label={t("Loading your messages...")} />
             ) : error && !messages.length ? (
               <p className="profile-error" role="alert">{error}</p>
             ) : !messages.length ? (
@@ -179,6 +180,36 @@ function ProfilePage({ user, onSignIn, onSignOut }) {
           </section>
         </>
       )}
+      <section className="profile-card profile-market-info" id="market-info">
+        <span className="eyebrow muted-eyebrow">{t("GREEN MARKET DETAILS")}</span>
+        <h2>{t("Help, policies & contact")}</h2>
+        <div className="profile-market-info-grid">
+          <div>
+            <h3>{t("Visit & contact")}</h3>
+            <span>Kabuga Market</span>
+            <a href="tel:+250787377750">0787 377 750</a>
+            <a href="mailto:info@greenmarket.rw">info@greenmarket.rw</a>
+            <a href="mailto:ishconnlab@gmail.com">{t("Contact the developer")}</a>
+          </div>
+          <div>
+            <h3>{t("Explore")}</h3>
+            <Link to="/#shop">{t("Shop everything")}</Link>
+            <Link to="/orders">{t("Your orders")}</Link>
+            <Link to="/seller">{t("Sell with us")}</Link>
+          </div>
+          <div>
+            <h3>{t("Information")}</h3>
+            <Link to="/help">{t("Help centre")}</Link>
+            <Link to="/guide">{t("Shopping guide")}</Link>
+            <Link to="/policies">{t("Store policies")}</Link>
+            <Link to="/privacy">{t("Privacy")}</Link>
+          </div>
+        </div>
+        <div className="profile-market-info-bottom">
+          <span>© {new Date().getFullYear()} Green Market · {t("Thoughtfully picked. Ready for real life.")}</span>
+          <span>{t("Powered by")} <a href="mailto:ishconnlab@gmail.com">Ishconnect</a></span>
+        </div>
+      </section>
     </main>
   );
 }

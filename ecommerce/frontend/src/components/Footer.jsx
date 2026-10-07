@@ -40,6 +40,7 @@ function Footer() {
       <div className="footer-bottom">
         <span>© {new Date().getFullYear()} Green Market</span>
         <span>{t("Thoughtfully picked. Ready for real life.")}</span>
+        <span>{t("Powered by")} <a href="mailto:ishconnlab@gmail.com">Ishconnect</a></span>
       </div>
     </footer>
   );

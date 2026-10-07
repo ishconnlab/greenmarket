@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f7f9f4"/>
+      <stop offset="1" stop-color="#e9f0e5"/>
+    </linearGradient>
+    <linearGradient id="field" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1b6c46"/>
+      <stop offset="1" stop-color="#124d36"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#background)"/>
+  <circle cx="1020" cy="68" r="180" fill="#dbe8d2"/>
+  <circle cx="1110" cy="520" r="238" fill="#d5e4ce"/>
+  <rect x="66" y="66" width="1068" height="498" rx="34" fill="url(#field)"/>
+  <circle cx="980" cy="210" r="110" fill="#e5edcb" opacity=".18"/>
+  <path d="M911 415c53-88 103-136 164-169-14 72-65 127-164 169Z" fill="#c3d995" opacity=".86"/>
+  <path d="M930 430c12-82 4-146-27-204 66 32 95 99 27 204Z" fill="#8fb874" opacity=".9"/>
+  <path d="M899 440c-34-56-79-97-145-119 72-16 129 13 145 119Z" fill="#d1dda0" opacity=".88"/>
+  <rect x="112" y="112" width="56" height="56" rx="19" fill="#ffffff" opacity=".16"/>
+  <text x="140" y="153" fill="#fff" font-family="Georgia,serif" font-size="42" font-style="italic" text-anchor="middle">g</text>
+  <text x="112" y="258" fill="#d4e6ce" font-family="Arial,sans-serif" font-size="19" font-weight="700" letter-spacing="5">FRESH FINDS FOR EVERYDAY LIVING</text>
+  <text x="108" y="345" fill="#fff" font-family="Arial,sans-serif" font-size="72" font-weight="700" letter-spacing="-3">Green Market</text>
+  <text x="112" y="397" fill="#fff" font-family="Arial,sans-serif" font-size="34" font-weight="400">Shop local. Find something good.</text>
+  <text x="112" y="492" fill="#d4e6ce" font-family="Arial,sans-serif" font-size="22" font-weight="600">KABUGA, RWANDA</text>
+</svg>

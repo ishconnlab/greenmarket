@@ -7,9 +7,10 @@ import Store from "../models/Store.js";
 import requireAuth from "./authMiddleware.js";
 import requireAdmin from "./adminMiddleware.js";
 import { notifyUser } from "../services/pushNotifications.js";
-import { cancelOrderAndRestoreStock } from "../services/orderOperations.js";
+import { cancelOrderAndRestoreStock, canTransitionOrderStatus } from "../services/orderOperations.js";
 
 const router = express.Router();
+const ADMIN_ORDER_PAGE_SIZE = 10;
 const orderStatuses = ["pending", "processing", "shipped", "delivered", "cancelled"];
 const statusLabels = {
   pending: "Pending",
@@ -47,15 +48,105 @@ router.get("/orders", async (req, res) => {
 
 router.get("/admin/orders", requireAuth, requireAdmin, async (req, res) => {
   try {
+    const requestedPage = Number.parseInt(req.query.page, 10);
+    const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+    const total = await Order.countDocuments();
+    const totalPages = Math.ceil(total / ADMIN_ORDER_PAGE_SIZE);
+    const safePage = totalPages ? Math.min(page, totalPages) : 1;
     const orders = await Order.find()
       .populate("user", "name email")
       .populate("items.product", "name")
       .populate("store", "name slug")
-      .sort({ createdAt: -1 });
-    return res.status(200).json({ orders });
+      .sort({ createdAt: -1, _id: -1 })
+      .skip((safePage - 1) * ADMIN_ORDER_PAGE_SIZE)
+      .limit(ADMIN_ORDER_PAGE_SIZE);
+    return res.status(200).json({
+      orders,
+      pagination: { page: safePage, pageSize: ADMIN_ORDER_PAGE_SIZE, total, totalPages },
+    });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ msg: "Could not load orders" });
+  }
+});
+
+function getReportFilter(query) {
+  const filter = {};
+  const createdAt = {};
+  for (const [field, operator] of [["startDate", "$gte"], ["endDate", "$lt"]]) {
+    const value = query[field];
+    if (!value) continue;
+    if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      return { error: `${field} must be a date in YYYY-MM-DD format` };
+    }
+    const date = new Date(`${value}T00:00:00.000Z`);
+    if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value) {
+      return { error: `${field} is not a valid date` };
+    }
+    if (field === "endDate") date.setUTCDate(date.getUTCDate() + 1);
+    createdAt[operator] = date;
+  }
+  if (Object.keys(createdAt).length) filter.createdAt = createdAt;
+  const status = query.status || "all";
+  if (!["all", ...orderStatuses].includes(status)) {
+    return { error: "Choose a valid report order status" };
+  }
+  if (status !== "all") filter.status = status;
+  return { filter };
+}
+
+router.get("/admin/orders/report-summary", requireAuth, requireAdmin, async (req, res) => {
+  const result = getReportFilter(req.query);
+  if (result.error) return res.status(400).json({ msg: result.error });
+  try {
+    const [summary] = await Order.aggregate([
+      { $match: result.filter },
+      {
+        $group: {
+          _id: null,
+          count: { $sum: 1 },
+          orderValue: { $sum: "$total" },
+          paidTotal: {
+            $sum: {
+              $cond: [{ $eq: ["$paymentStatus", "paid"] }, "$total", 0],
+            },
+          },
+          openOrders: {
+            $sum: {
+              $cond: [{ $in: ["$status", ["pending", "processing", "shipped"]] }, 1, 0],
+            },
+          },
+        },
+      },
+    ]);
+    return res.status(200).json({
+      summary: {
+        count: summary?.count || 0,
+        orderValue: summary?.orderValue || 0,
+        paidTotal: summary?.paidTotal || 0,
+        openOrders: summary?.openOrders || 0,
+      },
+    });
+  } catch (error) {
+    console.error("Could not load order report summary:", error);
+    return res.status(500).json({ msg: "Could not load order report summary" });
+  }
+});
+
+router.get("/admin/orders/report", requireAuth, requireAdmin, async (req, res) => {
+  const result = getReportFilter(req.query);
+  if (result.error) return res.status(400).json({ msg: result.error });
+  try {
+    const orders = await Order.find(result.filter)
+      .populate("user", "name email")
+      .populate("items.product", "name")
+      .populate("store", "name slug")
+      .sort({ createdAt: -1, _id: -1 })
+      .lean();
+    return res.status(200).json({ orders });
+  } catch (error) {
+    console.error("Could not load order report details:", error);
+    return res.status(500).json({ msg: "Could not load order report details" });
   }
 });
 
@@ -77,27 +168,32 @@ router.patch("/admin/orders/:id", requireAuth, requireAdmin, async (req, res) =>
     if (!currentOrder) {
       return res.status(404).json({ msg: "Order not found" });
     }
+    if (status !== undefined && !canTransitionOrderStatus(currentOrder.status, status)) {
+      return res.status(409).json({ msg: "Order status cannot move backward or be cancelled after shipment" });
+    }
+    if (status === "cancelled" && paymentStatus !== undefined) {
+      return res.status(400).json({ msg: "Update payment confirmation separately from order cancellation" });
+    }
+    if (currentOrder.status === "cancelled"
+      && paymentStatus !== undefined
+      && paymentStatus !== currentOrder.paymentStatus) {
+      return res.status(409).json({ msg: "Payment confirmation cannot change after cancellation" });
+    }
+    if (currentOrder.paymentStatus === "paid" && paymentStatus === "awaiting_confirmation") {
+      return res.status(409).json({ msg: "Confirmed payment cannot be reverted" });
+    }
     if (status === "cancelled" && currentOrder.status !== "cancelled") {
       const order = await cancelOrderAndRestoreStock({
         orderId: currentOrder._id,
         expectedStatus: currentOrder.status,
-        paymentStatus,
-        paymentConfirmedAt: currentOrder.paymentConfirmedAt,
       });
       if (!order) {
         return res.status(409).json({ msg: "Order status changed. Refresh and try again." });
       }
       const changes = [`status changed to ${statusLabels.cancelled}.`];
-      if (paymentStatus !== undefined && paymentStatus !== currentOrder.paymentStatus) {
-        changes.push(`Payment is now ${paymentStatus === "paid" ? "confirmed" : "awaiting confirmation"}.`);
-      }
       notifyOrderUpdate(order.user, order, changes);
       return res.status(200).json({ msg: "Order updated", order });
     }
-    if (currentOrder.status === "cancelled" && status && status !== "cancelled") {
-      return res.status(409).json({ msg: "Cancelled orders cannot be reopened" });
-    }
-
     const update = {};
     if (status !== undefined) update.status = status;
     if (paymentStatus !== undefined) {

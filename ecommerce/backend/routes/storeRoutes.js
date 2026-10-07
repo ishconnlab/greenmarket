@@ -77,19 +77,17 @@ router.post("/stores/apply", requireAuth, async (req, res) => {
   if (!input) return res.status(400).json({ msg: "Provide a valid store name, address, and description" });
   try {
     const current = await Store.findOne({ owner: req.user.id }).sort({ updatedAt: -1 });
-    if (current?.status === "approved" || current?.status === "paused") {
-      return res.status(409).json({ msg: "You already have a store. Open its dashboard to manage it." });
+    if (current) {
+      const msg = current.status === "pending"
+        ? "Your store request is awaiting review. Update it from your seller dashboard."
+        : ["approved", "paused"].includes(current.status)
+          ? "You already have a store. Update it from your seller dashboard."
+          : "You already have a store profile. Update its details from your seller dashboard to request another review.";
+      return res.status(409).json({
+        msg,
+      });
     }
-    if (current?.status === "pending") {
-      return res.status(409).json({ msg: "Your store request is awaiting review" });
-    }
-    const store = current
-      ? await Store.findByIdAndUpdate(
-        current._id,
-        { $set: { ...input, status: "pending", reviewNote: "", reviewedAt: null } },
-        { new: true, runValidators: true }
-      )
-      : await Store.create({ ...input, owner: req.user.id });
+    const store = await Store.create({ ...input, owner: req.user.id });
     return res.status(201).json({
       msg: "Store application submitted for Green Market review",
       store,
@@ -106,10 +104,10 @@ router.patch("/stores/mine", requireAuth, async (req, res) => {
   }
   try {
     const store = await Store.findOne({ owner: req.user.id }).sort({ updatedAt: -1 });
-    if (!store || ["removed"].includes(store.status)) {
+    if (!store) {
       return res.status(404).json({ msg: "Store application not found" });
     }
-    if (store.status === "pending" || store.status === "rejected") {
+    if (["pending", "rejected", "removed"].includes(store.status)) {
       Object.assign(store, input);
       store.status = "pending";
       store.reviewNote = "";

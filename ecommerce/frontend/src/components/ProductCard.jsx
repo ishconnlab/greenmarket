@@ -92,6 +92,11 @@ function ProductCard({ product, index, isFavorite, onToggleFavorite, onAddToCart
           />
         )}
         <span className="product-category">{t(product.category || "Everyday")}</span>
+        {product.promotionLabel && (
+          <span className={`product-promotion product-promotion-${product.promotionColor || "green"}`}>
+            {product.promotionLabel}
+          </span>
+        )}
         <button
           className={`favorite-button ${isFavorite ? "is-favorite" : ""}`}
           onClick={() => onToggleFavorite(product._id)}

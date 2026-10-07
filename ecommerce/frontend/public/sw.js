@@ -6,6 +6,9 @@ const SHELL_URLS = [
   "/favicon.svg",
   "/icons/icon-192.svg",
   "/icons/icon-512.svg",
+  "/icons/icon-180.png",
+  "/icons/icon-192.png",
+  "/icons/icon-512.png",
 ];
 
 self.addEventListener("install", (event) => {
@@ -94,7 +97,7 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     self.registration.showNotification(notification.title || "Green Market order update", {
       body: notification.body || "There is an update to your order.",
-      icon: "/icons/icon-192.svg",
+      icon: "/icons/icon-192.png",
       badge: "/favicon.svg",
       data: { url: notification.url || "/orders" },
       tag: notification.tag || `green-market-order-${Date.now()}`,

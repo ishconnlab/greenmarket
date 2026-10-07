@@ -3,6 +3,9 @@ import api from "../api.js";
 import { useLanguage } from "../context/LanguageContext.jsx";
 import { apiErrorMessage } from "../utils/apiError.js";
 import { money } from "../utils/format.js";
+import BrandedLoader from "../components/BrandedLoader.jsx";
+import Pagination from "../components/Pagination.jsx";
+import { canTransitionOrderStatus } from "../utils/orderStatus.js";
 
 const emptyStore = {
   name: "",
@@ -32,7 +35,14 @@ function SellerDashboardPage({ user, onSignIn }) {
   const [store, setStore] = useState(null);
   const [storeDraft, setStoreDraft] = useState(emptyStore);
   const [products, setProducts] = useState([]);
+  const [productPagination, setProductPagination] = useState({ page: 1, pageSize: 5, total: 0, totalPages: 0 });
+  const [productPage, setProductPage] = useState(1);
+  const [productsLoading, setProductsLoading] = useState(false);
   const [orders, setOrders] = useState([]);
+  const [orderPagination, setOrderPagination] = useState({ page: 1, pageSize: 10, total: 0, totalPages: 0 });
+  const [orderPage, setOrderPage] = useState(1);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [summary, setSummary] = useState({ totalProducts: 0, lowStockCount: 0, openOrders: 0, paidSales: 0 });
   const [productDraft, setProductDraft] = useState(emptyProduct);
   const [editingProductId, setEditingProductId] = useState("");
   const [loading, setLoading] = useState(true);
@@ -41,6 +51,9 @@ function SellerDashboardPage({ user, onSignIn }) {
   const [busyOrder, setBusyOrder] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const pendingOrderCount = summary.openOrders;
+  const paidSales = summary.paidSales;
+  const lowStockCount = summary.lowStockCount;
 
   useEffect(() => {
     let active = true;
@@ -59,16 +72,25 @@ function SellerDashboardPage({ user, onSignIn }) {
           ? Object.fromEntries(Object.keys(emptyStore).map((key) => [key, data.store[key] || ""]))
           : emptyStore);
         if (data.store?.status === "approved" || data.store?.status === "paused") {
-          const [productResponse, orderResponse] = await Promise.all([
-            api.get("/seller/products"),
-            api.get("/seller/orders"),
+          const [productResponse, orderResponse, summaryResponse] = await Promise.all([
+            api.get("/seller/products", { params: { page: 1 } }),
+            api.get("/seller/orders", { params: { page: 1 } }),
+            api.get("/seller/summary"),
           ]);
           if (!active) return;
           setProducts(productResponse.data.products);
+          setProductPagination(productResponse.data.pagination);
+          setProductPage(productResponse.data.pagination.page);
           setOrders(orderResponse.data.orders);
+          setOrderPagination(orderResponse.data.pagination);
+          setOrderPage(orderResponse.data.pagination.page);
+          setSummary(summaryResponse.data.summary);
         } else {
           setProducts([]);
+          setProductPagination({ page: 1, pageSize: 5, total: 0, totalPages: 0 });
           setOrders([]);
+          setOrderPagination({ page: 1, pageSize: 10, total: 0, totalPages: 0 });
+          setSummary({ totalProducts: 0, lowStockCount: 0, openOrders: 0, paidSales: 0 });
         }
       } catch (requestError) {
         console.error("Could not load seller dashboard:", requestError);
@@ -81,13 +103,48 @@ function SellerDashboardPage({ user, onSignIn }) {
     return () => { active = false; };
   }, [user?.id]);
 
+  async function loadProductsPage(page = productPage) {
+    setProductsLoading(true);
+    setError("");
+    try {
+      const { data } = await api.get("/seller/products", { params: { page } });
+      setProducts(data.products);
+      setProductPagination(data.pagination);
+      setProductPage(data.pagination.page);
+    } catch (requestError) {
+      setError(apiErrorMessage(requestError, "Could not load your products."));
+    } finally {
+      setProductsLoading(false);
+    }
+  }
+
+  async function loadOrdersPage(page = orderPage) {
+    setOrdersLoading(true);
+    setError("");
+    try {
+      const { data } = await api.get("/seller/orders", { params: { page } });
+      setOrders(data.orders);
+      setOrderPagination(data.pagination);
+      setOrderPage(data.pagination.page);
+    } catch (requestError) {
+      setError(apiErrorMessage(requestError, "Could not load store orders."));
+    } finally {
+      setOrdersLoading(false);
+    }
+  }
+
+  async function refreshSummary() {
+    const { data } = await api.get("/seller/summary");
+    setSummary(data.summary);
+  }
+
   async function saveStore(event) {
     event.preventDefault();
     setSavingStore(true);
     setError("");
     setNotice("");
     try {
-      const { data } = store && store.status !== "removed"
+      const { data } = store
         ? await api.patch("/stores/mine", storeDraft)
         : await api.post("/stores/apply", storeDraft);
       setStore(data.store);
@@ -117,10 +174,12 @@ function SellerDashboardPage({ user, onSignIn }) {
         ));
         setNotice(t("Product updated."));
       } else {
-        const { data } = await api.post("/seller/products", body);
-        setProducts((current) => [data.product, ...current]);
+        await api.post("/seller/products", body);
+        setProductPage(1);
+        await loadProductsPage(1);
         setNotice(t("Product added."));
       }
+      await refreshSummary();
       setProductDraft(emptyProduct);
       setEditingProductId("");
     } catch (requestError) {
@@ -143,7 +202,8 @@ function SellerDashboardPage({ user, onSignIn }) {
     setError("");
     try {
       await api.delete(`/seller/products/${product._id}`);
-      setProducts((current) => current.filter((item) => item._id !== product._id));
+      await loadProductsPage(productPage);
+      await refreshSummary();
       if (editingProductId === product._id) {
         setEditingProductId("");
         setProductDraft(emptyProduct);
@@ -162,6 +222,7 @@ function SellerDashboardPage({ user, onSignIn }) {
       setOrders((current) => current.map((item) =>
         item._id === order._id ? { ...item, ...data.order } : item
       ));
+      await refreshSummary();
       setNotice(t("Order updated."));
     } catch (requestError) {
       setError(apiErrorMessage(requestError, "Could not update this order."));
@@ -170,7 +231,7 @@ function SellerDashboardPage({ user, onSignIn }) {
     }
   }
 
-  if (loading) return <main className="seller-dashboard"><div className="empty-state">{t("Loading seller dashboard...")}</div></main>;
+  if (loading) return <main className="seller-dashboard"><BrandedLoader label={t("Loading seller dashboard...")} /></main>;
   if (!user) {
     return (
       <main className="seller-dashboard">
@@ -185,20 +246,54 @@ function SellerDashboardPage({ user, onSignIn }) {
   }
 
   return (
-    <main className="seller-dashboard">
+    <div className="seller-workspace">
+      <aside className="seller-sidebar" aria-label={t("Store management navigation")}>
+        <div className="seller-sidebar-brand">
+          {store?.logoUrl
+            ? <img src={store.logoUrl} alt="" />
+            : <span>{store?.name?.trim().charAt(0).toUpperCase() || "S"}</span>}
+          <div><strong>{store?.name || t("My store")}</strong><small>{t("Seller workspace")}</small></div>
+        </div>
+        <nav className="seller-sidebar-nav">
+          <a href="#seller-overview"><span aria-hidden="true">⌂</span>{t("Overview")}</a>
+          <a href="#seller-store-profile"><span aria-hidden="true">⚙</span>{t("Store profile")}</a>
+          {(store?.status === "approved" || store?.status === "paused") && (
+            <>
+              <a href="#seller-catalog"><span aria-hidden="true">□</span>{t("Products")}<small>{productPagination.total}</small></a>
+              <a href="#seller-orders"><span aria-hidden="true">▤</span>{t("Orders")}<small>{pendingOrderCount}</small></a>
+            </>
+          )}
+        </nav>
+        {store?.status === "approved" && (
+          <a className="seller-sidebar-store-link" href={`/store/${store.slug}`} target="_blank" rel="noreferrer">
+            {t("View live store")} <span aria-hidden="true">↗</span>
+          </a>
+        )}
+      </aside>
+      <main className="seller-dashboard">
+      <header className="seller-dashboard-header" id="seller-overview">
       <span className="eyebrow muted-eyebrow">{t("SELLER WORKSPACE")}</span>
       <h1>{t("Your standalone store")}</h1>
       <p className="seller-dashboard-intro">{t("Manage your independent Green Market shop, products, and customer orders.")}</p>
+      </header>
+      {(store?.status === "approved" || store?.status === "paused") && (
+        <section className="seller-overview" aria-label={t("Store overview")}>
+          <div><span>{t("Products")}</span><strong>{summary.totalProducts}</strong><small>{t("in your catalog")}</small></div>
+          <div><span>{t("Orders to process")}</span><strong>{pendingOrderCount}</strong><small>{t("pending or processing")}</small></div>
+          <div><span>{t("Confirmed sales")}</span><strong>{money(paidSales)}</strong><small>{t("paid orders only")}</small></div>
+          <div><span>{t("Low stock")}</span><strong>{lowStockCount}</strong><small>{t("products with 5 or fewer")}</small></div>
+        </section>
+      )}
       {error && <div className="admin-message admin-error" role="alert">{error}</div>}
       {notice && <div className="admin-message admin-success" role="status">{notice}</div>}
 
-      <section className="seller-panel">
+      <section className="seller-panel" id="seller-store-profile">
         <div className="seller-panel-heading">
           <div>
             <span className={`seller-status-pill seller-status-${store?.status || "new"}`}>
               {t(store?.status || "Not applied")}
             </span>
-            <h2>{t(store && store.status !== "removed" ? "Store profile and settings" : "Apply to open a store")}</h2>
+            <h2>{t(store ? "Store profile and settings" : "Apply to open a store")}</h2>
           </div>
           {store?.status === "approved" && <a className="storefront-main-link" href={`/store/${store.slug}`} target="_blank" rel="noreferrer">{t("Open my store")} ↗</a>}
         </div>
@@ -210,6 +305,9 @@ function SellerDashboardPage({ user, onSignIn }) {
         )}
         {store?.status === "paused" && (
           <p className="seller-review-note">{t("Your store is paused by Green Market. You can view orders and update store details, but products are hidden until it is approved again.")}</p>
+        )}
+        {store?.status === "removed" && (
+          <p className="seller-review-note">{t("This store was removed by Green Market. Update its details here to request another review; you cannot create a second store profile.")}</p>
         )}
         <form className="admin-product-form seller-store-form" onSubmit={saveStore}>
           <label>{t("Store name")}<input value={storeDraft.name} onChange={(event) => setStoreDraft({ ...storeDraft, name: event.target.value })} maxLength={100} required /></label>
@@ -224,7 +322,7 @@ function SellerDashboardPage({ user, onSignIn }) {
           {(!store || ["pending", "rejected", "removed"].includes(store.status)) && (
             <div className="admin-form-actions admin-field-wide">
               <button className="primary-button" disabled={savingStore}>
-                {savingStore ? t("Saving...") : store && store.status !== "removed" ? t("Update and resubmit") : t("Submit store request")}
+                {savingStore ? t("Saving...") : store ? t("Update and resubmit") : t("Submit store request")}
               </button>
             </div>
           )}
@@ -238,10 +336,10 @@ function SellerDashboardPage({ user, onSignIn }) {
 
       {(store?.status === "approved" || store?.status === "paused") && (
         <>
-          <section className="seller-panel">
+          <section className="seller-panel" id="seller-catalog">
             <div className="seller-panel-heading">
               <div><span className="eyebrow muted-eyebrow">{t("STORE CATALOG")}</span><h2>{t(editingProductId ? "Edit product" : "Add a product")}</h2></div>
-              <span>{products.length} {t("products")}</span>
+              <span>{productPagination.total} {t("products")}</span>
             </div>
             <form className="admin-product-form seller-store-form" onSubmit={saveProduct} id="seller-product-editor">
               <label>{t("Product name")}<input value={productDraft.name} onChange={(event) => setProductDraft({ ...productDraft, name: event.target.value })} required maxLength={120} /></label>
@@ -257,7 +355,7 @@ function SellerDashboardPage({ user, onSignIn }) {
                 {editingProductId && <button type="button" className="retry-button" onClick={() => { setEditingProductId(""); setProductDraft(emptyProduct); }}>{t("Cancel edit")}</button>}
               </div>
             </form>
-            <div className="admin-product-list">
+            {productsLoading ? <BrandedLoader label={t("Loading products...")} /> : <div className="admin-product-list">
               {products.map((product) => (
                 <article className="admin-product-row" key={product._id}>
                   {product.imageUrl ? <img src={product.imageUrl} alt={product.imageAlt || ""} /> : <span className="admin-product-placeholder">g</span>}
@@ -265,29 +363,43 @@ function SellerDashboardPage({ user, onSignIn }) {
                   <div className="admin-row-actions"><button className="retry-button" onClick={() => startEditingProduct(product)}>{t("Edit")}</button><button className="retry-button danger-button" onClick={() => removeProduct(product)}>{t("Remove")}</button></div>
                 </article>
               ))}
-            </div>
+              {!products.length && <div className="empty-state">{t("No products yet. Add your first one above.")}</div>}
+            </div>}
+            <Pagination
+              page={productPagination.page}
+              totalPages={productPagination.totalPages}
+              total={productPagination.total}
+              onPageChange={loadProductsPage}
+            />
           </section>
 
-          <section className="seller-panel">
-            <div className="seller-panel-heading"><div><span className="eyebrow muted-eyebrow">{t("CUSTOMER ORDERS")}</span><h2>{t("Orders for {store}", { store: store.name })}</h2></div><span>{orders.length} {t("orders")}</span></div>
-            {!orders.length ? <div className="empty-state">{t("No orders have been placed for your store yet.")}</div> : (
+          <section className="seller-panel" id="seller-orders">
+            <div className="seller-panel-heading"><div><span className="eyebrow muted-eyebrow">{t("CUSTOMER ORDERS")}</span><h2>{t("Orders for {store}", { store: store.name })}</h2></div><span>{orderPagination.total} {t("orders")}</span></div>
+            {ordersLoading ? <BrandedLoader label={t("Loading orders...")} /> : !orders.length ? <div className="empty-state">{t("No orders have been placed for your store yet.")}</div> : (
               <div className="admin-order-list">
                 {orders.map((order) => (
                   <article className="admin-order-card" key={order._id}>
-                    <div className="admin-order-topline"><div><strong>{t("Order {code}", { code: order._id.slice(-6).toUpperCase() })}</strong><span>{new Date(order.createdAt).toLocaleString()}</span></div><label className="admin-status-control">{t("Status")}<select value={order.status} disabled={busyOrder === order._id || order.status === "cancelled"} onChange={(event) => updateOrder(order, { status: event.target.value })}>{orderStatuses.map((status) => <option key={status} value={status}>{t(status)}</option>)}</select></label></div>
+                    <div className="admin-order-topline"><div><strong>{t("Order {code}", { code: order._id.slice(-6).toUpperCase() })}</strong><span>{new Date(order.createdAt).toLocaleString()}</span></div><label className="admin-status-control">{t("Status")}<select value={order.status} disabled={busyOrder === order._id || order.status === "cancelled"} onChange={(event) => updateOrder(order, { status: event.target.value })}>{orderStatuses.map((status) => <option key={status} value={status} disabled={!canTransitionOrderStatus(order.status, status)}>{t(status)}</option>)}</select></label></div>
                     <div className="admin-order-customer"><strong>{order.user?.name || t("Customer account unavailable")}</strong>{order.user?.email && <span>{order.user.email}</span>}</div>
                     <p className="admin-order-items">{order.items.map((item) => `${item.productName} × ${item.quantity}`).join(" · ")}</p>
-                    <div className="admin-payment-row"><span>{t("Payment:")} {t(({ momo: "MTN MoMo", airtel_money: "Airtel Money", bank_of_kigali: "Bank of Kigali" })[order.paymentMethod] || "Payment not recorded")} · {money(order.total)}</span><label>{t("Confirmation")}<select value={order.paymentStatus} disabled={busyOrder === order._id} onChange={(event) => updateOrder(order, { paymentStatus: event.target.value })}><option value="awaiting_confirmation">{t("Awaiting confirmation")}</option><option value="paid">{t("Paid")}</option></select></label></div>
+                    <div className="admin-payment-row"><span>{t("Payment:")} {t(({ momo: "MTN MoMo", airtel_money: "Airtel Money", bank_of_kigali: "Bank of Kigali" })[order.paymentMethod] || "Payment not recorded")} · {money(order.total)}</span><label>{t("Confirmation")}<select value={order.paymentStatus} disabled={busyOrder === order._id || order.status === "cancelled"} onChange={(event) => updateOrder(order, { paymentStatus: event.target.value })}><option value="awaiting_confirmation" disabled={order.paymentStatus === "paid"}>{t("Awaiting confirmation")}</option><option value="paid">{t("Paid")}</option></select></label></div>
                     {order.paymentAccount && <p className="admin-order-items">{t("Payment account")}: {order.paymentAccount}</p>}
                     <p className="seller-delivery-address"><strong>{t("Delivery address")}:</strong> {order.address}</p>
                   </article>
                 ))}
               </div>
             )}
+            <Pagination
+              page={orderPagination.page}
+              totalPages={orderPagination.totalPages}
+              total={orderPagination.total}
+              onPageChange={loadOrdersPage}
+            />
           </section>
         </>
       )}
-    </main>
+      </main>
+    </div>
   );
 }
 

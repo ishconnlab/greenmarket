@@ -6,9 +6,11 @@ import User from "../models/User.js";
 import requireAuth from "./authMiddleware.js";
 import requireStoreOwner from "./storeMiddleware.js";
 import { notifyUser } from "../services/pushNotifications.js";
-import { cancelOrderAndRestoreStock } from "../services/orderOperations.js";
+import { cancelOrderAndRestoreStock, canTransitionOrderStatus } from "../services/orderOperations.js";
 
 const router = express.Router();
+const PRODUCT_PAGE_SIZE = 5;
+const ORDER_PAGE_SIZE = 10;
 const orderStatuses = ["pending", "processing", "shipped", "delivered", "cancelled"];
 const productFields = ["slug", "name", "description", "price", "category", "stock", "imageUrl", "imageAlt"];
 const stringProductFields = {
@@ -52,10 +54,47 @@ function validateProductStrings(input, storeSlug) {
 
 router.use("/seller", requireAuth, requireStoreOwner);
 
+router.get("/seller/summary", async (req, res) => {
+  try {
+    const [totalProducts, lowStockCount, openOrders, sales] = await Promise.all([
+      Product.countDocuments({ store: req.store._id }),
+      Product.countDocuments({ store: req.store._id, stock: { $gt: 0, $lte: 5 } }),
+      Order.countDocuments({ store: req.store._id, status: { $in: ["pending", "processing", "shipped"] } }),
+      Order.aggregate([
+        { $match: { store: req.store._id, paymentStatus: "paid" } },
+        { $group: { _id: null, total: { $sum: "$total" } } },
+      ]),
+    ]);
+    return res.status(200).json({
+      summary: {
+        totalProducts,
+        lowStockCount,
+        openOrders,
+        paidSales: sales[0]?.total || 0,
+      },
+    });
+  } catch (error) {
+    console.error("Could not load seller dashboard summary:", error);
+    return res.status(500).json({ msg: "Could not load store summary" });
+  }
+});
+
 router.get("/seller/products", async (req, res) => {
   try {
-    const products = await Product.find({ store: req.store._id }).sort({ createdAt: -1 });
-    return res.status(200).json({ products });
+    const requestedPage = Number.parseInt(req.query.page, 10);
+    const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+    const filter = { store: req.store._id };
+    const total = await Product.countDocuments(filter);
+    const totalPages = Math.ceil(total / PRODUCT_PAGE_SIZE);
+    const safePage = totalPages ? Math.min(page, totalPages) : 1;
+    const products = await Product.find(filter)
+      .sort({ createdAt: -1, _id: -1 })
+      .skip((safePage - 1) * PRODUCT_PAGE_SIZE)
+      .limit(PRODUCT_PAGE_SIZE);
+    return res.status(200).json({
+      products,
+      pagination: { page: safePage, pageSize: PRODUCT_PAGE_SIZE, total, totalPages },
+    });
   } catch (error) {
     console.error("Could not load seller products:", error);
     return res.status(500).json({ msg: "Could not load your products" });
@@ -163,11 +202,22 @@ router.delete("/seller/products/:id", async (req, res) => {
 
 router.get("/seller/orders", async (req, res) => {
   try {
-    const orders = await Order.find({ store: req.store._id })
+    const requestedPage = Number.parseInt(req.query.page, 10);
+    const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+    const filter = { store: req.store._id };
+    const total = await Order.countDocuments(filter);
+    const totalPages = Math.ceil(total / ORDER_PAGE_SIZE);
+    const safePage = totalPages ? Math.min(page, totalPages) : 1;
+    const orders = await Order.find(filter)
       .populate("user", "name email")
       .populate("items.product", "name imageUrl")
-      .sort({ createdAt: -1 });
-    return res.status(200).json({ orders });
+      .sort({ createdAt: -1, _id: -1 })
+      .skip((safePage - 1) * ORDER_PAGE_SIZE)
+      .limit(ORDER_PAGE_SIZE);
+    return res.status(200).json({
+      orders,
+      pagination: { page: safePage, pageSize: ORDER_PAGE_SIZE, total, totalPages },
+    });
   } catch (error) {
     console.error("Could not load seller orders:", error);
     return res.status(500).json({ msg: "Could not load store orders" });
@@ -187,15 +237,24 @@ router.patch("/seller/orders/:id", async (req, res) => {
   try {
     const current = await Order.findOne({ _id: req.params.id, store: req.store._id });
     if (!current) return res.status(404).json({ msg: "Store order not found" });
-    if (current.status === "cancelled" && status && status !== "cancelled") {
-      return res.status(409).json({ msg: "Cancelled orders cannot be reopened" });
+    if (status !== undefined && !canTransitionOrderStatus(current.status, status)) {
+      return res.status(409).json({ msg: "Order status cannot move backward or be cancelled after shipment" });
+    }
+    if (status === "cancelled" && paymentStatus !== undefined) {
+      return res.status(400).json({ msg: "Update payment confirmation separately from order cancellation" });
+    }
+    if (current.status === "cancelled"
+      && paymentStatus !== undefined
+      && paymentStatus !== current.paymentStatus) {
+      return res.status(409).json({ msg: "Payment confirmation cannot change after cancellation" });
+    }
+    if (current.paymentStatus === "paid" && paymentStatus === "awaiting_confirmation") {
+      return res.status(409).json({ msg: "Confirmed payment cannot be reverted" });
     }
     if (status === "cancelled" && current.status !== "cancelled") {
       const order = await cancelOrderAndRestoreStock({
         orderId: current._id,
         expectedStatus: current.status,
-        paymentStatus,
-        paymentConfirmedAt: current.paymentConfirmedAt,
         storeId: req.store._id,
       });
       if (!order) return res.status(409).json({ msg: "Order changed. Refresh and try again." });

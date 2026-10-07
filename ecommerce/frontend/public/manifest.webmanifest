@@ -2,7 +2,7 @@
   "id": "/",
   "name": "Green Market",
   "short_name": "Green Market",
-  "description": "Fresh finds for everyday living.",
+  "description": "Shop fresh fruit, pantry essentials, home goods and local market favourites online in Rwanda.",
   "start_url": "/?source=pwa",
   "scope": "/",
   "display": "standalone",
@@ -12,16 +12,22 @@
   "categories": ["shopping", "lifestyle"],
   "icons": [
     {
-      "src": "/icons/icon-192.svg",
+      "src": "/icons/icon-192.png",
       "sizes": "192x192",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "type": "image/png",
+      "purpose": "any"
     },
     {
-      "src": "/icons/icon-512.svg",
+      "src": "/icons/icon-512.png",
       "sizes": "512x512",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ],
   "shortcuts": [
@@ -29,13 +35,13 @@
       "name": "Shop",
       "short_name": "Shop",
       "url": "/#shop",
-      "icons": [{ "src": "/icons/icon-192.svg", "sizes": "192x192", "type": "image/svg+xml" }]
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     },
     {
       "name": "Order history",
       "short_name": "Orders",
       "url": "/orders",
-      "icons": [{ "src": "/icons/icon-192.svg", "sizes": "192x192", "type": "image/svg+xml" }]
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     }
   ]
 }
