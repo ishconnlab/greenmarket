@@ -386,7 +386,12 @@ function App() {
         <Route path="/policies" element={<InfoPage page="policies" />} />
         <Route path="/privacy" element={<InfoPage page="privacy" />} />
         <Route path="/store/:slug" element={<StorefrontPage onStoreLoaded={setActiveStore} onAddToCart={addToCart} onNotice={showNotice} />} />
-        <Route path="/seller" element={<SellerDashboardPage user={user} onSignIn={() => setAuthMode("login")} />} />
+        <Route
+          path="/seller"
+          element={user?.role === "admin"
+            ? <Navigate to="/admin" replace />
+            : <SellerDashboardPage user={user} onSignIn={() => setAuthMode("login")} />}
+        />
         <Route
           path="/admin"
           element={
@@ -429,10 +434,10 @@ function App() {
             <span>{t("Admin")}</span>
           </NavLink>
         )}
-        {(user?.role === "seller" || user?.role === "admin") && (
-          <NavLink to="/seller" aria-label={t(user.role === "seller" ? "My store" : "Sell with us")}>
+        {user?.role === "seller" && (
+          <NavLink to="/seller" aria-label={t("My store")}>
             <span className="mobile-tab-icon"><AppNavIcon name="seller" /></span>
-            <span>{t(user.role === "seller" ? "My store" : "Sell with us")}</span>
+            <span>{t("My store")}</span>
           </NavLink>
         )}
         {user ? (

@@ -14,11 +14,16 @@ function ProductCard({ product, index, isFavorite, onToggleFavorite, onAddToCart
 
   useEffect(() => {
     if (!detailsOpen) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     const closeOnEscape = (event) => {
       if (event.key === "Escape") setDetailsOpen(false);
     };
     window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
   }, [detailsOpen]);
   useEffect(() => {
     if (autoOpenDetails) setDetailsOpen(true);
@@ -99,9 +104,7 @@ function ProductCard({ product, index, isFavorite, onToggleFavorite, onAddToCart
           className="product-detail-image-trigger"
           onClick={openProductDetails}
           aria-label={`${t("View product details")}: ${product.name}`}
-        >
-          <span>{t("View product details")} ↗</span>
-        </button>
+        />
         {product.imageUrl && (
           <img
             className="product-image"

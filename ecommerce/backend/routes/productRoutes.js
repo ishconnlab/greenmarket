@@ -74,11 +74,14 @@ router.get("/admin/products", requireAuth, requireAdmin, async (req, res) => {
   const requestedPage = Number.parseInt(req.query.page, 10);
   const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
   const search = typeof req.query.search === "string" ? req.query.search.trim().slice(0, 100) : "";
-  const filter = search
-    ? { $or: ["name", "category", "slug"].map((field) => ({
-      [field]: { $regex: search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" },
-    })) }
-    : {};
+  const filter = {
+    store: null,
+    ...(search
+      ? { $or: ["name", "category", "slug"].map((field) => ({
+        [field]: { $regex: search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" },
+      })) }
+      : {}),
+  };
   try {
     const total = await Product.countDocuments(filter);
     const totalPages = Math.ceil(total / PAGE_SIZE);
@@ -128,13 +131,13 @@ router.put("/products/:id", requireAuth, requireAdmin, async (req, res) => {
     if (!input || Object.keys(input).length === 0) {
       return res.status(400).json({ msg: "Provide at least one product field to update" });
     }
-    const product = await Product.findByIdAndUpdate(req.params.id, input, {
+    const product = await Product.findOneAndUpdate({ _id: req.params.id, store: null }, input, {
       new: true,
       runValidators: true,
     });
 
     if (!product) {
-      return res.status(404).json({ msg: "Product not found" });
+      return res.status(404).json({ msg: "Main-market product not found" });
     }
 
     return res.status(200).json({ msg: "Product updated successfully", product });
@@ -152,7 +155,10 @@ router.delete("/products/:id", requireAuth, requireAdmin, async (req, res) => {
     let product;
     try {
       await session.withTransaction(async () => {
-        product = await Product.findByIdAndDelete(req.params.id, { session });
+        product = await Product.findOneAndDelete(
+          { _id: req.params.id, store: null },
+          { session }
+        );
         if (product) {
           await User.updateMany(
             { "cart.product": product._id },
@@ -164,7 +170,7 @@ router.delete("/products/:id", requireAuth, requireAdmin, async (req, res) => {
     } finally {
       await session.endSession();
     }
-    if (!product) return res.status(404).json({ msg: "Product not found" });
+    if (!product) return res.status(404).json({ msg: "Main-market product not found" });
     return res.status(200).json({ msg: "Product deleted successfully" });
   } catch (error) {
     return respondWithDatabaseError(res, error);

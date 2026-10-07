@@ -5,6 +5,7 @@ import Store from "../models/Store.js";
 import User from "../models/User.js";
 import requireAuth from "./authMiddleware.js";
 import requireAdmin from "./adminMiddleware.js";
+import requireNonAdmin from "./nonAdminMiddleware.js";
 
 const router = express.Router();
 const editableFields = [
@@ -63,7 +64,7 @@ function handleStoreError(res, error) {
   return res.status(500).json({ msg: "Could not complete store request" });
 }
 
-router.get("/stores/mine", requireAuth, async (req, res) => {
+router.get("/stores/mine", requireAuth, requireNonAdmin, async (req, res) => {
   try {
     const store = await Store.findOne({ owner: req.user.id }).sort({ updatedAt: -1 }).lean();
     return res.status(200).json({ store });
@@ -72,7 +73,7 @@ router.get("/stores/mine", requireAuth, async (req, res) => {
   }
 });
 
-router.post("/stores/apply", requireAuth, async (req, res) => {
+router.post("/stores/apply", requireAuth, requireNonAdmin, async (req, res) => {
   const input = cleanInput(req.body);
   if (!input) return res.status(400).json({ msg: "Provide a valid store name, address, and description" });
   try {
@@ -97,7 +98,7 @@ router.post("/stores/apply", requireAuth, async (req, res) => {
   }
 });
 
-router.patch("/stores/mine", requireAuth, async (req, res) => {
+router.patch("/stores/mine", requireAuth, requireNonAdmin, async (req, res) => {
   const input = cleanInput(req.body, { partial: true });
   if (!input || !Object.keys(input).length) {
     return res.status(400).json({ msg: "Provide valid store details to update" });

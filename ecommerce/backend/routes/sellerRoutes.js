@@ -5,6 +5,7 @@ import Product from "../models/Product.js";
 import User from "../models/User.js";
 import requireAuth from "./authMiddleware.js";
 import requireStoreOwner from "./storeMiddleware.js";
+import requireNonAdmin from "./nonAdminMiddleware.js";
 import { notifyUser } from "../services/pushNotifications.js";
 import { cancelOrderAndRestoreStock, canTransitionOrderStatus } from "../services/orderOperations.js";
 
@@ -52,7 +53,7 @@ function validateProductStrings(input, storeSlug) {
   return "";
 }
 
-router.use("/seller", requireAuth, requireStoreOwner);
+router.use("/seller", requireAuth, requireNonAdmin, requireStoreOwner);
 
 router.get("/seller/summary", async (req, res) => {
   try {

@@ -226,9 +226,8 @@ function Header({ user, isAdmin, isSeller, store, cartCount, onOpenCart, onSignI
           <NavLink className="text-button nav-link" to="/" end>{t("Shop")}</NavLink>
           {user && <NavLink className="text-button nav-link" to="/orders">{t("Orders")}</NavLink>}
           {user && <NavLink className="text-button nav-link" to="/profile">{t("Profile")}</NavLink>}
-          {isSeller
-            ? <NavLink className="text-button nav-link seller-nav-link" to="/seller">{t("My store")}</NavLink>
-            : <NavLink className="text-button nav-link seller-nav-link" to="/seller">{t("Sell with us")}</NavLink>}
+          {isSeller && <NavLink className="text-button nav-link seller-nav-link" to="/seller">{t("My store")}</NavLink>}
+          {!isAdmin && !isSeller && <NavLink className="text-button nav-link seller-nav-link" to="/seller">{t("Sell with us")}</NavLink>}
           {isAdmin && <NavLink className="text-button nav-link" to="/admin">{t("Admin")}</NavLink>}
           <label className="language-picker">
             <span className="sr-only">{t("Choose language")}</span>
