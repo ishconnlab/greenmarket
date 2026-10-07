@@ -56,8 +56,9 @@ app.use((error, req, res, next) => {
 });
 
 async function startServer() {
-  if (!process.env.MONGO_URI) {
-    throw new Error("MONGO_URI is required");
+  const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI;
+  if (!mongoUri) {
+    throw new Error("MONGODB_URI or MONGO_URI is required");
   }
   if (!process.env.JWT_SECRET) {
     throw new Error("JWT_SECRET is required");
@@ -66,7 +67,7 @@ async function startServer() {
     throw new Error("CORS_ORIGIN is required in production");
   }
 
-  await mongoose.connect(process.env.MONGO_URI);
+  await mongoose.connect(mongoUri);
   console.log("Connected to MongoDB");
   app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);

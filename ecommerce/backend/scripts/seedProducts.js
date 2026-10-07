@@ -158,11 +158,12 @@ const products = [
 ];
 
 async function seedProducts() {
-  if (!process.env.MONGO_URI) {
-    throw new Error("MONGO_URI is required to seed products");
+  const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI;
+  if (!mongoUri) {
+    throw new Error("MONGODB_URI or MONGO_URI is required to seed products");
   }
 
-  await mongoose.connect(process.env.MONGO_URI);
+  await mongoose.connect(mongoUri);
   let inserted = 0;
 
   for (const product of products) {

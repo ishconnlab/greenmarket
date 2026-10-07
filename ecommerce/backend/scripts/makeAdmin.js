@@ -6,14 +6,15 @@ dotenv.config();
 
 async function promoteAccount() {
   const email = process.argv[2]?.trim().toLowerCase();
+  const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI;
   if (!email) {
     throw new Error("Usage: npm run make-admin -- account@example.com");
   }
-  if (!process.env.MONGO_URI) {
-    throw new Error("MONGO_URI is required to promote an account");
+  if (!mongoUri) {
+    throw new Error("MONGODB_URI or MONGO_URI is required to promote an account");
   }
 
-  await mongoose.connect(process.env.MONGO_URI);
+  await mongoose.connect(mongoUri);
   const user = await User.findOneAndUpdate(
     { email },
     { $set: { role: "admin" } },

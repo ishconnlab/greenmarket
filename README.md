@@ -35,7 +35,7 @@ npm ci
 Copy-Item .env.example .env
 ```
 
-Set `MONGO_URI` to your MongoDB Atlas connection string and set a long, random `JWT_SECRET` in `ecommerce/backend/.env`. Replace the Atlas URI placeholders with your Atlas database user, cluster, and database. Do not put real credentials in source files or commit `.env`.
+Set `MONGODB_URI` to your MongoDB Atlas connection string and set a long, random `JWT_SECRET` in `ecommerce/backend/.env`. Replace the Atlas URI placeholders with your Atlas database user, cluster, and database. Do not put real credentials in source files or commit `.env`. Existing deployments using `MONGO_URI` continue to work.
 
 Start the API:
 
@@ -101,11 +101,11 @@ Deploy the backend on **Render** and the frontend on **Vercel**. Keep them as se
 
 1. Push the project to a Git repository after verifying that `.env` is ignored and no secrets are committed.
 2. In Render, create a Blueprint from the repository. The root [`render.yaml`](./render.yaml) configures the Node web service, production start command, and `/api/health` health check.
-3. Set the prompted `MONGO_URI` to your MongoDB Atlas connection string using a database user with a strong password. Set `CORS_ORIGIN` to the exact deployed Vercel origin, for example `https://greenmarket.vercel.app` (no trailing slash). Render generates `JWT_SECRET`.
+3. Set the prompted `MONGODB_URI` to your MongoDB Atlas connection string using a database user with a strong password. Set `CORS_ORIGIN` to the exact deployed Vercel origin, for example `https://greenmarket.vercel.app` (no trailing slash). Render generates `JWT_SECRET`.
 4. In MongoDB Atlas, allow network access from the deployed Render service using the access policy appropriate for your plan.
 5. Wait for the Render service to become healthy and note its public URL, such as `https://greenmarket-api.onrender.com`.
 
-The API expects the environment variable name `MONGO_URI` (not `MONGODB_URI`). Never commit `.env` or paste production credentials into source code.
+The API accepts `MONGODB_URI` and the legacy `MONGO_URI`. Never commit `.env` or paste production credentials into source code.
 
 ### 2. Deploy the storefront to Vercel
 
@@ -120,7 +120,7 @@ The [`ecommerce/frontend/vercel.json`](./ecommerce/frontend/vercel.json) file re
 
 | Variable | Service | Required | Purpose |
 | --- | --- | --- | --- |
-| `MONGO_URI` | Render/API | Yes | MongoDB connection string |
+| `MONGODB_URI` | Render/API | Yes | MongoDB connection string (`MONGO_URI` is also accepted for existing deployments) |
 | `JWT_SECRET` | Render/API | Yes | Signs authentication tokens |
 | `CORS_ORIGIN` | Render/API | Yes in production | Comma-separated allowed frontend origins |
 | `PORT` | Render/API | No | HTTP port; Render supplies this automatically |
@@ -128,7 +128,7 @@ The [`ecommerce/frontend/vercel.json`](./ecommerce/frontend/vercel.json) file re
 
 ## Security notes
 
-- Rotate any database credential that has been exposed, and update the Render `MONGO_URI` secret.
+- Rotate any database credential that has been exposed, and update the Render `MONGODB_URI` secret.
 - Do not commit `.env`, database credentials, JWT secrets, or payment PINs.
 - Production API startup requires an explicit `CORS_ORIGIN`.
 - Payment links contain only the selected provider flow, merchant number, and rounded amount. Payment PINs must be entered only in the mobile operator's secure USSD prompt.
