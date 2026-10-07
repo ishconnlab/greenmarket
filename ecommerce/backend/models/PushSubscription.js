@@ -8,10 +8,10 @@ const pushSubscriptionSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
-    endpoint: { type: String, required: true, unique: true },
+    endpoint: { type: String, required: true, unique: true, maxlength: 2048 },
     keys: {
-      p256dh: { type: String, required: true },
-      auth: { type: String, required: true },
+      p256dh: { type: String, required: true, minlength: 40, maxlength: 256 },
+      auth: { type: String, required: true, minlength: 16, maxlength: 256 },
     },
   },
   { timestamps: true }

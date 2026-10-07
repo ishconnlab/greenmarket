@@ -7,6 +7,11 @@ import productRoutes from "./routes/productRoutes.js";
 import cartRoutes from "./routes/cartRoutes.js";
 import orderRoutes from "./routes/orderRoutes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
+import contactRoutes from "./routes/contactRoutes.js";
+import promotionRoutes, { initializeDefaultPromotions } from "./routes/promotionRoutes.js";
+import shareRoutes from "./routes/shareRoutes.js";
+import storeRoutes from "./routes/storeRoutes.js";
+import sellerRoutes from "./routes/sellerRoutes.js";
 import { initializePushNotifications } from "./services/pushNotifications.js";
 
 dotenv.config();
@@ -45,6 +50,11 @@ app.use("/api", productRoutes);
 app.use("/api", cartRoutes);
 app.use("/api", orderRoutes);
 app.use("/api", notificationRoutes);
+app.use("/api", contactRoutes);
+app.use("/api", promotionRoutes);
+app.use("/api", storeRoutes);
+app.use("/api", sellerRoutes);
+app.use("/share", shareRoutes);
 
 app.use("/api", (req, res) => {
   return res.status(404).json({ msg: "API route not found" });
@@ -72,6 +82,7 @@ async function startServer() {
   }
 
   await mongoose.connect(mongoUri);
+  await initializeDefaultPromotions();
   console.log("Connected to MongoDB");
   app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);

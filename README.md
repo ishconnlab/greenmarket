@@ -5,29 +5,41 @@ A responsive e-commerce storefront for fresh food, everyday home goods, and usef
 - **Website:** [www.ishconnect.rw](https://www.ishconnect.rw)
 - **Frontend:** React, Vite, React Router, Axios
 - **API:** Node.js, Express, MongoDB, Mongoose
-- **Payments:** Rwanda MTN MoMo and Airtel Money USSD hand-off, with manual payment confirmation
+- **Payments:** MTN MoMo and Airtel Money USSD hand-off, plus manually confirmed Bank of Kigali transfers
 
 ## Features
 
 - Browse products with search, categories, sorting, and favorites.
 - Register and sign in to manage a cart and place orders.
-- Checkout with a delivery address and MTN MoMo or Airtel Money payment choice.
+- Larger checkout product cards, separate store carts, delivery details, and MTN MoMo, Airtel Money, or Bank of Kigali payment choices.
+- Mobile-money checkout records the payer's phone number; Bank of Kigali checkout records the payer's account number so the store can match a transfer.
+- Sellers can apply for a standalone shop at `/store/:slug`, configure its branding and contact details, manage products and handle orders.
+- Green Market admins review store applications, approve/reject requests, pause/resume shops, and remove stores and their active products.
+- Seller products can appear in the main catalog, but ordering them opens that seller's standalone store. Main-market and seller-store carts check out independently.
 - On supported mobile browsers, open the selected USSD flow from the order confirmation.
 - Admin product creation, editing, and removal.
+- Admin-managed market ticker promotions with image cards and YouTube or Instagram video links.
+- Product cards show a readable summary and open a full product-details view with availability and price.
+- Product details can be shared directly to WhatsApp and Facebook; Instagram uses the device share sheet and product pages provide social image previews.
 - Admin order list, order status controls, and manual payment confirmation.
 - Customer order updates and payment confirmations through opt-in web push notifications, including when the storefront is closed.
 - Customer order-receipt PDFs and filtered admin order-report PDFs, each with a QR code.
 - Admin reports with date and fulfilment-status filters, order value, and confirmed payment totals.
-- Clearer mobile-money choices during checkout.
+- Clear payment-method selection and payer-account details during checkout.
+- Customer profiles with private support inboxes for messages, product wishes, help requests, and issue reports.
+- Admin customer-care inbox with replies delivered to the customer's profile and enabled push notifications.
+- Help centre, shopping guide, store policies, and privacy information.
+- Store contact details for Kabuga Market, customer support, and developer enquiries.
 - New-order alerts in the admin dashboard, checked every 15 seconds while the page is open. Browser notifications require permission and a supported browser.
 - Responsive layouts for desktop and mobile.
+- Installable Progressive Web App with an offline-cached application shell and browser push notifications.
 
-USSD hand-off is **not an online payment gateway**: the customer completes payment with their mobile operator, and an administrator confirms payment in the dashboard. The website never asks for or stores a payment PIN. Bank of Kigali checkout is not enabled until its complete merchant details and verified USSD flow are available.
+Mobile-money USSD hand-off is **not an online payment gateway**: the customer completes payment with their mobile operator, and the store confirms payment in its dashboard. Bank of Kigali orders remain pending while the store provides transfer instructions and verifies the transfer. The website never asks for or stores a payment PIN and does not mark payments paid automatically.
 
 ## Requirements
 
 - Node.js 20 or later and npm
-- A MongoDB database (local or MongoDB Atlas)
+- MongoDB Atlas or another MongoDB replica set (checkout, cancellation, and store removal use transactions)
 
 ## Run locally
 
@@ -68,6 +80,8 @@ The seed command is safe to rerun; it does not overwrite existing products.
 
 To test customer push notifications locally, generate a VAPID key pair with `npx web-push generate-vapid-keys`, then set `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, and `VAPID_SUBJECT` in `ecommerce/backend/.env`. Keep the private key secret. Customers must sign in to Order history and enable notifications in each browser/device; they can then receive order events even when signed out or when the site is closed, subject to browser and device push support.
 
+To use a local MongoDB server, configure it as a single-node replica set before connecting; standalone MongoDB does not support the multi-document transactions used by order and inventory operations.
+
 ## Admin access
 
 Register the account you want to use in the storefront, then promote it from `ecommerce/backend`:
@@ -78,6 +92,10 @@ npm run make-admin -- admin@example.com
 ```
 
 Sign out and sign back in to refresh the account role in the browser. Admin routes enforce authorization on the API as well as hiding the dashboard from customer accounts. Keep admin credentials private.
+
+The admin dashboard's **Market Watch** section lets administrators create, edit, publish, hide, and remove promotional cards shown beneath the storefront navigation. YouTube links get an automatic thumbnail; for Instagram video links, provide an image URL to use as the card preview. Video cards open the original video in a new tab.
+
+The **Marketplace** section lets administrators review seller applications, approve or reject them, pause or resume approved stores, and remove a store while retaining its historical orders. Approved sellers use **Sell with us** / **My store** to configure their standalone storefront and manage their own catalog and orders. Customers visit `/store/<slug>` to order from one seller at a time.
 
 ## API overview
 
@@ -90,16 +108,32 @@ All API routes are under `/api`.
 | `GET` | `/products/:id` | Public | Get one product |
 | `POST` | `/register` | Public | Register an account |
 | `POST` | `/login` | Public | Sign in |
-| `GET`, `POST` | `/cart` | Signed in | Read cart and place items into cart |
-| `PATCH`, `DELETE` | `/cart/:productId` | Signed in | Change or remove a cart item |
-| `GET`, `POST` | `/orders` | Signed in | List the current user's orders and check out |
+| `GET` | `/cart` | Signed in | Read the main cart; optional `storeId` scopes the response to an approved standalone store |
+| `POST`, `PATCH`, `DELETE` | `/cart/:productId` | Signed in | Add, change, or remove an item; optional `storeId` enforces the cart scope |
+| `GET`, `POST` | `/orders` | Signed in | List the current user's orders and check out; submit `address`, `paymentMethod`, and `paymentAccount`, plus optional `storeId` |
 | `POST`, `PUT`, `DELETE` | `/products` and `/products/:id` | Admin | Create, update, and remove products |
+| `GET` | `/promotions` | Public | List published market ticker promotions |
+| `GET`, `POST` | `/admin/promotions` | Admin | List and create market ticker promotions |
+| `PATCH`, `DELETE` | `/admin/promotions/:id` | Admin | Update, publish/hide, or remove a promotion |
+| `POST` | `/stores/apply` | Signed in | Submit or resubmit a standalone store application |
+| `GET`, `PATCH` | `/stores/mine` | Signed in | Read or update your own store details |
+| `GET` | `/stores/:slug` | Public | Read the public profile for an approved store |
+| `GET` | `/stores/:slug/products` | Public | List products for an approved store |
+| `GET` | `/admin/stores` | Admin | Review standalone store applications and statuses |
+| `PATCH`, `DELETE` | `/admin/stores/:id` | Admin | Approve/reject/pause/resume or remove a store |
+| `GET`, `POST`, `PATCH`, `DELETE` | `/seller/products` and `/seller/products/:id` | Approved seller | Manage only the seller's products |
+| `GET`, `PATCH` | `/seller/orders` and `/seller/orders/:id` | Approved seller | View or update orders for only the seller's store |
 | `GET` | `/admin/orders` | Admin | List all orders with customer and payment details |
 | `PATCH` | `/admin/orders/:id` | Admin | Update fulfillment `status` or `paymentStatus` |
 | `GET` | `/notifications/public-key` | Public | Get the Web Push application server key |
 | `POST`, `DELETE` | `/notifications/subscribe` | Signed in | Register or remove this browser's push subscription |
+| `GET`, `POST` | `/contact/messages` | Signed in | Read your support inbox or send a message, wish, help request, or report |
+| `GET` | `/admin/messages` | Admin | List customer messages |
+| `PATCH` | `/admin/messages/:id/reply` | Admin | Reply to a customer in their profile inbox |
 
 Order fulfillment statuses are `pending`, `processing`, `shipped`, `delivered`, and `cancelled`. Payment confirmation statuses are `awaiting_confirmation` and `paid`.
+
+`paymentMethod` is `momo`, `airtel_money`, or `bank_of_kigali`. `paymentAccount` is the mobile number or bank account number supplied for matching payment; it is visible only to the customer who placed the order and the authorized admin(s) for that order's store. A `storeId` checkout contains products from that approved store only and creates an independent store-linked order.
 
 ## Production deployment
 
@@ -134,6 +168,7 @@ The [`ecommerce/frontend/vercel.json`](./ecommerce/frontend/vercel.json) file re
 | `CORS_ORIGIN` | Render/API | Yes in production | Comma-separated allowed frontend origins |
 | `PORT` | Render/API | No | HTTP port; Render supplies this automatically |
 | `VITE_API_URL` | Vercel/frontend | Yes in production | Public API base URL, including `/api` |
+| `FRONTEND_URL` | Render/API | No | Storefront origin used in share-page canonical URLs; defaults to the production Vercel URL |
 | `VAPID_PUBLIC_KEY` | Render/API | Yes for push | Web Push application server public key |
 | `VAPID_PRIVATE_KEY` | Render/API | Yes for push | Secret Web Push application server private key |
 | `VAPID_SUBJECT` | Render/API | Yes for push | Contact URI such as `mailto:admin@example.com` |
@@ -142,5 +177,8 @@ The [`ecommerce/frontend/vercel.json`](./ecommerce/frontend/vercel.json) file re
 
 - Rotate any database credential that has been exposed, and update the Render `MONGODB_URI` secret.
 - Do not commit `.env`, database credentials, JWT secrets, or payment PINs.
+- Store owners can only manage their own store's products and orders; admin endpoints verify the current database role.
+- Order placement, stock reservation/restoration, and store/product removal use MongoDB transactions and therefore require a transaction-capable replica set.
+- Checkout retains the payer's mobile number or bank account number on the order for payment matching. Access is restricted to that customer and authorized store administrators; never enter a mobile-money or banking PIN on the website.
 - Production API startup requires an explicit `CORS_ORIGIN`.
-- Payment links contain only the selected provider flow, merchant number, and rounded amount. Payment PINs must be entered only in the mobile operator's secure USSD prompt.
+- Mobile-money USSD links contain only the selected provider flow, merchant number, and rounded amount. Payment is manually confirmed; no method is automatically marked paid.

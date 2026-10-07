@@ -2,6 +2,7 @@ import express from "express";
 import mongoose from "mongoose";
 import Product from "../models/Product.js";
 import User from "../models/User.js";
+import Store from "../models/Store.js";
 import requireAuth from "./authMiddleware.js";
 import requireAdmin from "./adminMiddleware.js";
 
@@ -52,7 +53,14 @@ router.post("/products", requireAuth, requireAdmin, async (req, res) => {
 
 router.get("/products", async (req, res) => {
   try {
-    const products = await Product.find();
+    const activeStores = await Store.find({ status: "approved" }).select("_id").lean();
+    const products = await Product.find({
+      $or: [
+        { store: null },
+        { store: { $exists: false } },
+        { store: { $in: activeStores.map((store) => store._id) } },
+      ],
+    }).populate("store", "name slug");
     return res.status(200).json({ products });
   } catch (error) {
     return respondWithDatabaseError(res, error);
@@ -68,6 +76,10 @@ router.get("/products/:id", async (req, res) => {
 
     if (!product) {
       return res.status(404).json({ msg: "Product not found" });
+    }
+    if (product.store) {
+      const store = await Store.findOne({ _id: product.store, status: "approved" }).select("_id");
+      if (!store) return res.status(404).json({ msg: "Product not found" });
     }
 
     return res.status(200).json({ product });
@@ -105,16 +117,23 @@ router.delete("/products/:id", requireAuth, requireAdmin, async (req, res) => {
     if (!mongoose.isValidObjectId(req.params.id)) {
       return res.status(400).json({ msg: "Invalid product id" });
     }
-    const product = await Product.findByIdAndDelete(req.params.id);
-
-    if (!product) {
-      return res.status(404).json({ msg: "Product not found" });
+    const session = await mongoose.startSession();
+    let product;
+    try {
+      await session.withTransaction(async () => {
+        product = await Product.findByIdAndDelete(req.params.id, { session });
+        if (product) {
+          await User.updateMany(
+            { "cart.product": product._id },
+            { $pull: { cart: { product: product._id } } },
+            { session }
+          );
+        }
+      });
+    } finally {
+      await session.endSession();
     }
-
-    await User.updateMany(
-      { "cart.product": product._id },
-      { $pull: { cart: { product: product._id } } }
-    );
+    if (!product) return res.status(404).json({ msg: "Product not found" });
     return res.status(200).json({ msg: "Product deleted successfully" });
   } catch (error) {
     return respondWithDatabaseError(res, error);

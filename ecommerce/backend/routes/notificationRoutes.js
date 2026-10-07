@@ -6,6 +6,28 @@ import { getPushPublicKey } from "../services/pushNotifications.js";
 
 const router = express.Router();
 
+function isTrustedPushEndpoint(endpoint) {
+  try {
+    const url = new URL(endpoint);
+    const hostname = url.hostname.toLowerCase();
+    const trustedHost = hostname === "fcm.googleapis.com"
+      || hostname === "push.services.mozilla.com"
+      || hostname.endsWith(".push.services.mozilla.com")
+      || hostname === "web.push.apple.com"
+      || hostname === "push.services.opera.com"
+      || hostname.endsWith(".notify.windows.com");
+    return url.protocol === "https:"
+      && !url.username
+      && !url.password
+      && !url.port
+      && !url.hash
+      && trustedHost
+      && url.href.length <= 2048;
+  } catch {
+    return false;
+  }
+}
+
 router.get("/notifications/public-key", (req, res) => {
   const publicKey = getPushPublicKey();
   if (!publicKey) {
@@ -18,9 +40,13 @@ router.post("/notifications/subscribe", requireAuth, async (req, res) => {
   const subscription = req.body;
   if (
     typeof subscription?.endpoint !== "string" ||
-    !subscription.endpoint.startsWith("https://") ||
+    !isTrustedPushEndpoint(subscription.endpoint) ||
     typeof subscription.keys?.p256dh !== "string" ||
-    typeof subscription.keys?.auth !== "string"
+    subscription.keys.p256dh.length < 40 ||
+    subscription.keys.p256dh.length > 256 ||
+    typeof subscription.keys?.auth !== "string" ||
+    subscription.keys.auth.length < 16 ||
+    subscription.keys.auth.length > 256
   ) {
     return res.status(400).json({ msg: "A valid browser push subscription is required" });
   }

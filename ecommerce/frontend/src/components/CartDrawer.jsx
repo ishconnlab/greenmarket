@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { money } from "../utils/format.js";
+import { useLanguage } from "../context/LanguageContext.jsx";
 
 function CartDrawer({
   user,
+  store,
   cart,
   cartCount,
   cartTotal,
@@ -14,24 +16,27 @@ function CartDrawer({
   onCheckout,
 }) {
   const [paymentMethod, setPaymentMethod] = useState("momo");
+  const [paymentAccount, setPaymentAccount] = useState("");
+  const { t } = useLanguage();
 
   return (
     <div className="modal-backdrop drawer-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <aside className="drawer" role="dialog" aria-modal="true" aria-labelledby="cart-title">
         <div className="drawer-heading">
           <div>
-            <span className="eyebrow muted-eyebrow">YOUR PICKS</span>
-            <h2 id="cart-title">Your bag <span>({cartCount})</span></h2>
+            <span className="eyebrow muted-eyebrow">{t("YOUR PICKS")}</span>
+            <h2 id="cart-title">{t("Your bag")} <span>({cartCount})</span></h2>
           </div>
-          <button className="close-button" onClick={onClose} aria-label="Close cart">×</button>
+          {store && <p className="cart-store-context">{t("Separate checkout for")} <strong>{store.name}</strong></p>}
+          <button className="close-button" onClick={onClose} aria-label={t("Close cart")}>×</button>
         </div>
         {!user ? (
           <div className="empty-state drawer-empty">
-            Sign in to see and save items in your bag.
-            <button className="primary-button" onClick={onSignIn}>Sign in</button>
+            {t("Sign in to see and save items in your bag.")}
+              <button className="primary-button" onClick={onSignIn}>{t("Sign in")}</button>
           </div>
         ) : !cart.length ? (
-          <div className="empty-state drawer-empty">Your bag is waiting for something good.</div>
+          <div className="empty-state drawer-empty">{t("Your bag is waiting for something good.")}</div>
         ) : (
           <>
             <div className="cart-items">
@@ -47,21 +52,21 @@ function CartDrawer({
                     <div className="cart-item-mark">{item.product?.name?.charAt(0)?.toUpperCase()}</div>
                   )}
                   <div className="cart-item-details">
-                    <strong>{item.product?.name || "Unavailable product"}</strong>
+                    <strong>{item.product?.name || t("Unavailable product")}</strong>
                     <span>{money(item.product?.price)}</span>
                     <div className="quantity-control">
                       <button
                         onClick={() => item.quantity > 1
                           ? onUpdateQuantity(item.product._id, item.quantity - 1)
                           : onRemove(item.product._id)}
-                        aria-label="Decrease quantity"
+                        aria-label={t("Decrease quantity")}
                       >−</button>
                       <span>{item.quantity}</span>
                       <button
                         onClick={() => onUpdateQuantity(item.product._id, item.quantity + 1)}
-                        aria-label="Increase quantity"
+                        aria-label={t("Increase quantity")}
                       >+</button>
-                      <button className="remove-button" onClick={() => onRemove(item.product._id)}>Remove</button>
+                      <button className="remove-button" onClick={() => onRemove(item.product._id)}>{t("Remove")}</button>
                     </div>
                   </div>
                   <strong className="line-total">{money((item.product?.price || 0) * item.quantity)}</strong>
@@ -69,15 +74,15 @@ function CartDrawer({
               ))}
             </div>
             <div className="cart-summary">
-              <div className="subtotal"><span>Subtotal</span><strong>{money(cartTotal)}</strong></div>
-              <p>Delivery details are collected at checkout.</p>
+              <div className="subtotal"><span>{t("Subtotal")}</span><strong>{money(cartTotal)}</strong></div>
+              <p>{t("Delivery details are collected at checkout.")}</p>
               <form onSubmit={onCheckout} className="form-stack checkout-form">
                 <label>
-                  Delivery address
-                  <textarea name="address" required rows="2" placeholder="Street, city, postal code" />
+                  {t("Delivery address")}
+                  <textarea name="address" required rows="2" placeholder={t("Street, city, postal code")} />
                 </label>
                 <fieldset className="payment-options">
-                  <legend>Pay with</legend>
+                  <legend>{t("Pay with")}</legend>
                   <label className={`payment-choice${paymentMethod === "momo" ? " selected" : ""}`}>
                     <input
                       type="radio"
@@ -86,11 +91,12 @@ function CartDrawer({
                       checked={paymentMethod === "momo"}
                       onChange={() => setPaymentMethod("momo")}
                     />
-                    <span className="payment-choice-mark" aria-hidden="true">M</span>
+                    <span className="payment-choice-mark momo-mark" aria-hidden="true">M</span>
                     <span className="payment-choice-copy">
                       <strong>MTN MoMo</strong>
-                      <small>Pay from your mobile money account</small>
+                      <small>{t("Fast mobile money payment")}</small>
                     </span>
+                    <span className="payment-choice-check" aria-hidden="true">✓</span>
                   </label>
                   <label className={`payment-choice${paymentMethod === "airtel_money" ? " selected" : ""}`}>
                     <input
@@ -103,21 +109,53 @@ function CartDrawer({
                     <span className="payment-choice-mark airtel-mark" aria-hidden="true">A</span>
                     <span className="payment-choice-copy">
                       <strong>Airtel Money</strong>
-                      <small>Pay from your Airtel Money account</small>
+                      <small>{t("Pay with your Airtel wallet")}</small>
                     </span>
+                    <span className="payment-choice-check" aria-hidden="true">✓</span>
                   </label>
-                  <label className="payment-choice payment-option-disabled">
-                    <input type="radio" name="paymentMethod" value="bank_of_kigali" disabled />
+                  <label className={`payment-choice${paymentMethod === "bank_of_kigali" ? " selected" : ""}`}>
+                    <input
+                      type="radio"
+                      name="paymentMethod"
+                      value="bank_of_kigali"
+                      checked={paymentMethod === "bank_of_kigali"}
+                      onChange={() => setPaymentMethod("bank_of_kigali")}
+                    />
                     <span className="payment-choice-mark bank-mark" aria-hidden="true">BK</span>
                     <span className="payment-choice-copy">
                       <strong>Bank of Kigali</strong>
-                      <small>Not available yet</small>
+                      <small>{t("Bank transfer · confirmed by the store")}</small>
                     </span>
+                    <span className="payment-choice-check" aria-hidden="true">✓</span>
                   </label>
-                  <p>After placing your order, follow the secure USSD prompt on your phone. Payment is confirmed by the store; never enter your PIN on this website.</p>
+                  <label className="payment-account-field">
+                    {paymentMethod === "bank_of_kigali" ? t("BK account number used to pay") : t("Mobile money number")}
+                    <input
+                      name="paymentAccount"
+                      type="tel"
+                      inputMode="numeric"
+                      autoComplete={paymentMethod === "bank_of_kigali" ? "off" : "tel"}
+                      maxLength={24}
+                      value={paymentAccount}
+                      onChange={(event) => setPaymentAccount(event.target.value)}
+                      placeholder={paymentMethod === "bank_of_kigali" ? t("Enter your BK account number") : "07XX XXX XXX"}
+                      pattern={paymentMethod === "bank_of_kigali" ? "[0-9\\s-]{8,24}" : "(?:\\+?250[\\s-]?|0)?7[0-9\\s-]{8,12}"}
+                      title={paymentMethod === "bank_of_kigali"
+                        ? t("Enter a valid BK account number.")
+                        : t("Enter a valid Rwanda mobile number.")}
+                      required
+                    />
+                    <small>{paymentMethod === "bank_of_kigali"
+                      ? t("We use this to help the store match your transfer. Transfer instructions will be confirmed with the store.")
+                      : t("Enter the number you will use. Never enter your mobile money PIN here.")}</small>
+                  </label>
+                  <p className="payment-safety-note">
+                    <span aria-hidden="true">🔒</span>
+                    {t("Payments are confirmed by the store. Never enter your PIN on this website.")}
+                  </p>
                 </fieldset>
                 <button className="primary-button" disabled={busy}>
-                  {busy ? "Placing order..." : `Place order · ${money(cartTotal)}`}
+                  {busy ? t("Placing order...") : t("Place order · {total}", { total: money(cartTotal) })}
                 </button>
               </form>
             </div>

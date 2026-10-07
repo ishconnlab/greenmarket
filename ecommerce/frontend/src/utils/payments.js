@@ -13,7 +13,17 @@ const paymentProviders = {
 
 export function getPaymentInstructions(order) {
   const provider = paymentProviders[order.paymentMethod];
-  if (!provider) return null;
+  if (!provider) {
+    if (order.paymentMethod === "bank_of_kigali") {
+      return {
+        label: "Bank of Kigali",
+        amount: Math.round(order.total),
+        account: order.paymentAccount,
+        bankTransfer: true,
+      };
+    }
+    return null;
+  }
 
   const amount = Math.round(order.total);
   const ussd = `${provider.ussdPrefix}*${provider.merchantNumber}*${amount}#`;

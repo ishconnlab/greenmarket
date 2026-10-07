@@ -3,6 +3,7 @@ import { money } from "./format.js";
 const paymentLabels = {
   momo: "MTN MoMo",
   airtel_money: "Airtel Money",
+  bank_of_kigali: "Bank of Kigali",
   not_recorded: "Not recorded",
 };
 
@@ -53,7 +54,11 @@ export async function downloadOrderReceipt(order) {
   document.text(`Order: ${orderCode(order)}`, 16, 48);
   document.text(`Placed: ${orderDate(order.createdAt)}`, 16, 56);
   document.text(`Status: ${orderStatusLabel(order.status)}`, 16, 64);
-  document.text(`Payment method: ${paymentLabels[order.paymentMethod] || "Not recorded"}`, 16, 72);
+  document.text(
+    `Payment method: ${paymentLabels[order.paymentMethod] || "Not recorded"}${order.paymentAccount ? ` · ${order.paymentAccount}` : ""}`,
+    16,
+    72
+  );
   document.text(
     `Payment confirmation: ${order.paymentStatus === "paid"
       ? `Paid${order.paymentConfirmedAt ? ` on ${orderDate(order.paymentConfirmedAt)}` : ""}`

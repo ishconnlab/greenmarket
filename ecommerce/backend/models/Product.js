@@ -10,6 +10,12 @@ const productSchema = new mongoose.Schema(
     stock: { type: Number, default: 0, min: 0 },
     imageUrl: { type: String, trim: true, default: "" },
     imageAlt: { type: String, trim: true, default: "" },
+    store: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Store",
+      default: null,
+      index: true,
+    },
   },
   { timestamps: true }
 );

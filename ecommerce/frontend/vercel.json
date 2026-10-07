@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/share/products/:id",
+      "destination": "https://greenmarket-api-2x85.onrender.com/share/products/:id"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

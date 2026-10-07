@@ -7,6 +7,12 @@ const orderSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
+    store: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Store",
+      default: null,
+      index: true,
+    },
     items: [
       {
         product: {
@@ -24,9 +30,10 @@ const orderSchema = new mongoose.Schema(
     status: { type: String, default: "pending" },
     paymentMethod: {
       type: String,
-      enum: ["momo", "airtel_money", "not_recorded"],
+      enum: ["momo", "airtel_money", "bank_of_kigali", "not_recorded"],
       default: "not_recorded",
     },
+    paymentAccount: { type: String, trim: true, maxlength: 24, default: "" },
     paymentStatus: {
       type: String,
       enum: ["awaiting_confirmation", "paid"],

@@ -1,8 +1,13 @@
 import { useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import Hero from "../components/Hero.jsx";
 import ProductCard from "../components/ProductCard.jsx";
+import { useLanguage } from "../context/LanguageContext.jsx";
 
 function ShopPage({ products, loading, error, onRetry, onAddToCart }) {
+  const { t } = useLanguage();
+  const [searchParams] = useSearchParams();
+  const sharedProductId = searchParams.get("product");
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All");
   const [sort, setSort] = useState("featured");
@@ -48,10 +53,10 @@ function ShopPage({ products, loading, error, onRetry, onAddToCart }) {
   return (
     <main>
       <Hero />
-      <section className="category-ribbon" aria-label="Shop by category">
+      <section className="category-ribbon" aria-label={t("Shop by category")}>
         <div className="category-ribbon-heading">
-          <span className="eyebrow muted-eyebrow">A GOOD PLACE TO START</span>
-          <span>Small joys, sorted.</span>
+          <span className="eyebrow muted-eyebrow">{t("A GOOD PLACE TO START")}</span>
+          <span>{t("Small joys, sorted.")}</span>
         </div>
         <div className="category-shortcuts">
           {categories.filter((item) => item !== "All").map((item, index) => (
@@ -64,7 +69,7 @@ function ShopPage({ products, loading, error, onRetry, onAddToCart }) {
               }}
             >
               <span className="shortcut-icon">{item === "Fruit" ? "✳" : item === "Food" ? "◒" : item === "Devices" ? "⌁" : item === "Home" ? "⌂" : "✦"}</span>
-              <span>{item}</span>
+              <span>{t(item)}</span>
               <span className="shortcut-arrow" aria-hidden="true">↗</span>
             </button>
           ))}
@@ -73,30 +78,30 @@ function ShopPage({ products, loading, error, onRetry, onAddToCart }) {
       <section className="shop-section" id="shop">
         <div className="section-heading">
           <div>
-            <span className="eyebrow muted-eyebrow">THE EDIT</span>
-            <h2>Find your new favorite<span className="title-period">.</span></h2>
-            <p className="section-subtitle">Little things that make a day feel a little better.</p>
+            <span className="eyebrow muted-eyebrow">{t("THE EDIT")}</span>
+            <h2>{t("Find your new favorite")}<span className="title-period">.</span></h2>
+            <p className="section-subtitle">{t("Little things that make a day feel a little better.")}</p>
           </div>
           <label className="search-box">
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8" /><path d="m16 16 4.5 4.5" /></svg>
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search products"
-              aria-label="Search products"
+              placeholder={t("Search products")}
+              aria-label={t("Search products")}
             />
           </label>
         </div>
 
         <div className="catalog-toolbar">
-          <div className="category-list" aria-label="Filter products by category">
+          <div className="category-list" aria-label={t("Filter products by category")}>
             {categories.map((item) => (
               <button
                 key={item}
                 className={`category-chip ${category === item ? "active" : ""}`}
                 onClick={() => setCategory(item)}
               >
-                {item}
+                {t(item)}
               </button>
             ))}
           </div>
@@ -107,32 +112,32 @@ function ShopPage({ products, loading, error, onRetry, onAddToCart }) {
               aria-pressed={favoritesOnly}
             >
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 8.8c0 4.2-8.8 10-8.8 10s-8.8-5.8-8.8-10a4.7 4.7 0 0 1 8.8-2.3 4.7 4.7 0 0 1 8.8 2.3Z" /></svg>
-              Saved <span>{favorites.length}</span>
+              {t("Saved")} <span>{favorites.length}</span>
             </button>
             <label className="sort-control">
-              <span>Sort:</span>
-              <select value={sort} onChange={(event) => setSort(event.target.value)} aria-label="Sort products">
-                <option value="featured">Featured</option>
-                <option value="price-low">Price: low to high</option>
-                <option value="price-high">Price: high to low</option>
-                <option value="name">Name</option>
+              <span>{t("Sort:")}</span>
+              <select value={sort} onChange={(event) => setSort(event.target.value)} aria-label={t("Sort products")}>
+                <option value="featured">{t("Featured")}</option>
+                <option value="price-low">{t("Price: low to high")}</option>
+                <option value="price-high">{t("Price: high to low")}</option>
+                <option value="name">{t("Name")}</option>
               </select>
             </label>
           </div>
         </div>
 
         {loading ? (
-          <div className="empty-state">Finding the good stuff...</div>
+          <div className="empty-state">{t("Finding the good stuff...")}</div>
         ) : error ? (
           <div className="empty-state">
             {error}
-            <button className="retry-button" onClick={onRetry}>Try again</button>
+            <button className="retry-button" onClick={onRetry}>{t("Try again")}</button>
           </div>
         ) : filteredProducts.length ? (
           <>
             <div className="results-label">
-              <span>{favoritesOnly ? "Your saved finds" : category === "All" ? "A few good things" : category}</span>
-              <span>{filteredProducts.length} {filteredProducts.length === 1 ? "find" : "finds"}</span>
+              <span>{favoritesOnly ? t("Your saved finds") : category === "All" ? t("A few good things") : t(category)}</span>
+              <span>{filteredProducts.length} {filteredProducts.length === 1 ? t("find") : t("finds")}</span>
             </div>
             <div className="product-grid">
               {filteredProducts.map((product, index) => (
@@ -143,22 +148,26 @@ function ShopPage({ products, loading, error, onRetry, onAddToCart }) {
                   isFavorite={favorites.includes(product._id)}
                   onToggleFavorite={toggleFavorite}
                   onAddToCart={onAddToCart}
+                  autoOpenDetails={
+                    Boolean(sharedProductId)
+                    && (product._id === sharedProductId || product.slug === sharedProductId)
+                  }
                 />
               ))}
             </div>
           </>
         ) : (
           <div className="empty-state">
-            {favoritesOnly ? "No saved finds yet. Tap a heart to keep something close." : "No products found. Try another search."}
-            {favoritesOnly && <button className="retry-button" onClick={() => setFavoritesOnly(false)}>Browse everything</button>}
+            {favoritesOnly ? t("No saved finds yet. Tap a heart to keep something close.") : t("No products found. Try another search.")}
+            {favoritesOnly && <button className="retry-button" onClick={() => setFavoritesOnly(false)}>{t("Browse everything")}</button>}
           </div>
         )}
       </section>
 
       <section className="promise-row">
-        <div><span className="promise-icon">✳</span><strong>Chosen with care</strong><p>Everyday favourites, thoughtfully gathered.</p></div>
-        <div><span className="promise-icon">↗</span><strong>Room for discovery</strong><p>Fresh produce, home finds and useful tech.</p></div>
-        <div><span className="promise-icon">♡</span><strong>Keep what you love</strong><p>Save your favourite finds for next time.</p></div>
+        <div><span className="promise-icon">✳</span><strong>{t("Chosen with care")}</strong><p>{t("Everyday favourites, thoughtfully gathered.")}</p></div>
+        <div><span className="promise-icon">↗</span><strong>{t("Room for discovery")}</strong><p>{t("Fresh produce, home finds and useful tech.")}</p></div>
+        <div><span className="promise-icon">♡</span><strong>{t("Keep what you love")}</strong><p>{t("Save your favourite finds for next time.")}</p></div>
       </section>
     </main>
   );

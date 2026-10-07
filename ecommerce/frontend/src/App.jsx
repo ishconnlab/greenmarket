@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import api from "./api.js";
 import AuthDialog from "./components/AuthDialog.jsx";
 import CartDrawer from "./components/CartDrawer.jsx";
@@ -10,7 +10,13 @@ import Toast from "./components/Toast.jsx";
 import OrdersPage from "./pages/OrdersPage.jsx";
 import ShopPage from "./pages/ShopPage.jsx";
 import AdminPage from "./pages/AdminPage.jsx";
+import ProfilePage from "./pages/ProfilePage.jsx";
+import InfoPage from "./pages/InfoPage.jsx";
+import NotFoundPage from "./pages/NotFoundPage.jsx";
+import StorefrontPage from "./pages/StorefrontPage.jsx";
+import SellerDashboardPage from "./pages/SellerDashboardPage.jsx";
 import { apiErrorMessage } from "./utils/apiError.js";
+import { useLanguage } from "./context/LanguageContext.jsx";
 
 function getSavedUser() {
   try {
@@ -21,6 +27,10 @@ function getSavedUser() {
 }
 
 function App() {
+  const { t } = useLanguage();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const storeSlug = location.pathname.match(/^\/store\/([^/]+)/)?.[1] || "";
   const [products, setProducts] = useState([]);
   const [cart, setCart] = useState([]);
   const [user, setUser] = useState(getSavedUser);
@@ -31,7 +41,11 @@ function App() {
   const [productsLoading, setProductsLoading] = useState(true);
   const [productsError, setProductsError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [activeStore, setActiveStore] = useState(null);
   const noticeTimeout = useRef(null);
+  const cartLoadSequence = useRef(0);
+  const cartScopeRef = useRef(storeSlug ? `store:${storeSlug}` : "main");
+  cartScopeRef.current = storeSlug ? `store:${storeSlug}` : "main";
 
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
   const cartTotal = cart.reduce(
@@ -44,12 +58,26 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (user) {
-      loadCart();
+    if (!storeSlug) {
+      setActiveStore(null);
+    } else if (activeStore?.slug !== storeSlug) {
+      setActiveStore(null);
+      setCart([]);
+    }
+  }, [storeSlug, activeStore?.slug]);
+
+  useEffect(() => {
+    if (!user) {
+      cartLoadSequence.current += 1;
+      setCart([]);
+      return;
+    }
+    if (!storeSlug || activeStore?.slug === storeSlug) {
+      loadCart(activeStore);
     } else {
       setCart([]);
     }
-  }, [user]);
+  }, [user?.id, storeSlug, activeStore?.id]);
 
   useEffect(() => () => window.clearTimeout(noticeTimeout.current), []);
 
@@ -72,14 +100,23 @@ function App() {
     }
   }
 
-  async function loadCart() {
+  function storeQuery(store = activeStore) {
+    return store?._id || store?.id ? `?storeId=${encodeURIComponent(store._id || store.id)}` : "";
+  }
+
+  async function loadCart(store = activeStore) {
+    const requestSequence = ++cartLoadSequence.current;
+    const requestScope = cartScopeRef.current;
     try {
-      const { data } = await api.get("/cart");
-      setCart(data.cart);
+      const { data } = await api.get(`/cart${storeQuery(store)}`);
+      if (requestSequence === cartLoadSequence.current && requestScope === cartScopeRef.current) {
+        setCart(data.cart);
+      }
     } catch (error) {
+      if (requestSequence !== cartLoadSequence.current || requestScope !== cartScopeRef.current) return;
       if (error.response?.status === 401) {
         signOut(false);
-        showNotice("Your session expired. Please sign in again.");
+        showNotice(t("Your session expired. Please sign in again."));
       } else {
         showNotice(apiErrorMessage(error, "Could not load your cart."));
       }
@@ -87,33 +124,41 @@ function App() {
   }
 
   async function addToCart(product) {
+    if (product.store?.slug && activeStore?.slug !== product.store.slug) {
+      navigate(`/store/${product.store.slug}`);
+      showNotice(t("Open {store} to order its products separately.", { store: product.store.name }));
+      return;
+    }
     if (!user) {
       setAuthMode("login");
       showNotice("Sign in to add items to your cart.");
       return;
     }
+    const requestScope = cartScopeRef.current;
     try {
-      const { data } = await api.post(`/cart/${product._id}`);
-      setCart(data.cart);
-      showNotice(`${product.name} added to your cart.`);
+      const { data } = await api.post(`/cart/${product._id}${storeQuery()}`);
+      if (requestScope === cartScopeRef.current) setCart(data.cart);
+      showNotice(t("{name} added to your cart.", { name: product.name }));
     } catch (error) {
       showNotice(apiErrorMessage(error, "Could not add item to cart."));
     }
   }
 
   async function updateQuantity(productId, quantity) {
+    const requestScope = cartScopeRef.current;
     try {
-      const { data } = await api.patch(`/cart/${productId}`, { quantity });
-      setCart(data.cart);
+      const { data } = await api.patch(`/cart/${productId}${storeQuery()}`, { quantity });
+      if (requestScope === cartScopeRef.current) setCart(data.cart);
     } catch (error) {
       showNotice(apiErrorMessage(error, "Could not update quantity."));
     }
   }
 
   async function removeFromCart(productId) {
+    const requestScope = cartScopeRef.current;
     try {
-      const { data } = await api.delete(`/cart/${productId}`);
-      setCart(data.cart);
+      const { data } = await api.delete(`/cart/${productId}${storeQuery()}`);
+      if (requestScope === cartScopeRef.current) setCart(data.cart);
     } catch (error) {
       showNotice(apiErrorMessage(error, "Could not remove item."));
     }
@@ -135,7 +180,7 @@ function App() {
       localStorage.setItem("green-market-user", JSON.stringify(data.user));
       setUser(data.user);
       setAuthMode("");
-      showNotice(`Welcome${data.user.name ? `, ${data.user.name}` : ""}!`);
+      showNotice(t("Welcome{suffix}!", { suffix: data.user.name ? `, ${data.user.name}` : "" }));
     } catch (error) {
       showNotice(apiErrorMessage(error, "Could not sign in. Please try again."));
     } finally {
@@ -157,7 +202,13 @@ function App() {
       const form = new FormData(event.currentTarget);
       const address = form.get("address");
       const paymentMethod = form.get("paymentMethod");
-      const { data } = await api.post("/orders", { address, paymentMethod });
+      const paymentAccount = form.get("paymentAccount");
+      const { data } = await api.post("/orders", {
+        address,
+        paymentMethod,
+        paymentAccount,
+        ...(activeStore ? { storeId: activeStore._id || activeStore.id } : {}),
+      });
       await Promise.all([loadCart(), loadProducts()]);
       setCartOpen(false);
       setPaymentOrder(data.order);
@@ -174,6 +225,7 @@ function App() {
       <Header
         user={user}
         isAdmin={user?.role === "admin"}
+        isSeller={user?.role === "seller"}
         cartCount={cartCount}
         onOpenCart={() => setCartOpen(true)}
         onSignIn={() => setAuthMode("login")}
@@ -197,6 +249,16 @@ function App() {
           element={<OrdersPage user={user} onSignIn={() => setAuthMode("login")} />}
         />
         <Route
+          path="/profile"
+          element={<ProfilePage user={user} onSignIn={() => setAuthMode("login")} onSignOut={signOut} />}
+        />
+        <Route path="/help" element={<InfoPage page="help" />} />
+        <Route path="/guide" element={<InfoPage page="guide" />} />
+        <Route path="/policies" element={<InfoPage page="policies" />} />
+        <Route path="/privacy" element={<InfoPage page="privacy" />} />
+        <Route path="/store/:slug" element={<StorefrontPage onStoreLoaded={setActiveStore} onAddToCart={addToCart} />} />
+        <Route path="/seller" element={<SellerDashboardPage user={user} onSignIn={() => setAuthMode("login")} />} />
+        <Route
           path="/admin"
           element={
             user?.role === "admin" ? (
@@ -206,7 +268,7 @@ function App() {
             )
           }
         />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<NotFoundPage />} />
       </Routes>
       <Footer />
       {notice && <Toast message={notice} />}
@@ -225,6 +287,7 @@ function App() {
       {cartOpen && (
         <CartDrawer
           user={user}
+          store={activeStore}
           cart={cart}
           cartCount={cartCount}
           cartTotal={cartTotal}
