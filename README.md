@@ -15,6 +15,10 @@ A responsive e-commerce storefront for fresh food, everyday home goods, and usef
 - On supported mobile browsers, open the selected USSD flow from the order confirmation.
 - Admin product creation, editing, and removal.
 - Admin order list, order status controls, and manual payment confirmation.
+- Customer order updates and payment confirmations through opt-in web push notifications, including when the storefront is closed.
+- Customer order-receipt PDFs and filtered admin order-report PDFs, each with a QR code.
+- Admin reports with date and fulfilment-status filters, order value, and confirmed payment totals.
+- Clearer mobile-money choices during checkout.
 - New-order alerts in the admin dashboard, checked every 15 seconds while the page is open. Browser notifications require permission and a supported browser.
 - Responsive layouts for desktop and mobile.
 
@@ -62,6 +66,8 @@ npm run seed
 
 The seed command is safe to rerun; it does not overwrite existing products.
 
+To test customer push notifications locally, generate a VAPID key pair with `npx web-push generate-vapid-keys`, then set `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, and `VAPID_SUBJECT` in `ecommerce/backend/.env`. Keep the private key secret. Customers must sign in to Order history and enable notifications in each browser/device; they can then receive order events even when signed out or when the site is closed, subject to browser and device push support.
+
 ## Admin access
 
 Register the account you want to use in the storefront, then promote it from `ecommerce/backend`:
@@ -90,6 +96,8 @@ All API routes are under `/api`.
 | `POST`, `PUT`, `DELETE` | `/products` and `/products/:id` | Admin | Create, update, and remove products |
 | `GET` | `/admin/orders` | Admin | List all orders with customer and payment details |
 | `PATCH` | `/admin/orders/:id` | Admin | Update fulfillment `status` or `paymentStatus` |
+| `GET` | `/notifications/public-key` | Public | Get the Web Push application server key |
+| `POST`, `DELETE` | `/notifications/subscribe` | Signed in | Register or remove this browser's push subscription |
 
 Order fulfillment statuses are `pending`, `processing`, `shipped`, `delivered`, and `cancelled`. Payment confirmation statuses are `awaiting_confirmation` and `paid`.
 
@@ -102,8 +110,9 @@ Deploy the backend on **Render** and the frontend on **Vercel**. Keep them as se
 1. Push the project to a Git repository after verifying that `.env` is ignored and no secrets are committed.
 2. In Render, create a Blueprint from the repository. The root [`render.yaml`](./render.yaml) configures the Node web service, production start command, and `/api/health` health check.
 3. Set the prompted `MONGODB_URI` to your MongoDB Atlas connection string using a database user with a strong password. Set `CORS_ORIGIN` to `https://greenmarket-livid.vercel.app` (no trailing slash). Render generates `JWT_SECRET`.
-4. In MongoDB Atlas, allow network access from the deployed Render service using the access policy appropriate for your plan.
-5. Wait for the Render service to become healthy at `https://greenmarket-api-2x85.onrender.com`.
+4. Generate a VAPID key pair with `npx web-push generate-vapid-keys`. Add its public and private keys as Render `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY` secrets, and set `VAPID_SUBJECT` to a contact such as `mailto:admin@example.com`. Never expose or commit the private key.
+5. In MongoDB Atlas, allow network access from the deployed Render service using the access policy appropriate for your plan.
+6. Wait for the Render service to become healthy at `https://greenmarket-api-2x85.onrender.com`.
 
 The API accepts `MONGODB_URI` and the legacy `MONGO_URI`. Never commit `.env` or paste production credentials into source code.
 
@@ -125,6 +134,9 @@ The [`ecommerce/frontend/vercel.json`](./ecommerce/frontend/vercel.json) file re
 | `CORS_ORIGIN` | Render/API | Yes in production | Comma-separated allowed frontend origins |
 | `PORT` | Render/API | No | HTTP port; Render supplies this automatically |
 | `VITE_API_URL` | Vercel/frontend | Yes in production | Public API base URL, including `/api` |
+| `VAPID_PUBLIC_KEY` | Render/API | Yes for push | Web Push application server public key |
+| `VAPID_PRIVATE_KEY` | Render/API | Yes for push | Secret Web Push application server private key |
+| `VAPID_SUBJECT` | Render/API | Yes for push | Contact URI such as `mailto:admin@example.com` |
 
 ## Security notes
 

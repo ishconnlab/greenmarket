@@ -78,7 +78,7 @@ function CartDrawer({
                 </label>
                 <fieldset className="payment-options">
                   <legend>Pay with</legend>
-                  <label>
+                  <label className={`payment-choice${paymentMethod === "momo" ? " selected" : ""}`}>
                     <input
                       type="radio"
                       name="paymentMethod"
@@ -86,9 +86,13 @@ function CartDrawer({
                       checked={paymentMethod === "momo"}
                       onChange={() => setPaymentMethod("momo")}
                     />
-                    MTN MoMo
+                    <span className="payment-choice-mark" aria-hidden="true">M</span>
+                    <span className="payment-choice-copy">
+                      <strong>MTN MoMo</strong>
+                      <small>Pay from your mobile money account</small>
+                    </span>
                   </label>
-                  <label>
+                  <label className={`payment-choice${paymentMethod === "airtel_money" ? " selected" : ""}`}>
                     <input
                       type="radio"
                       name="paymentMethod"
@@ -96,13 +100,21 @@ function CartDrawer({
                       checked={paymentMethod === "airtel_money"}
                       onChange={() => setPaymentMethod("airtel_money")}
                     />
-                    Airtel Money
+                    <span className="payment-choice-mark airtel-mark" aria-hidden="true">A</span>
+                    <span className="payment-choice-copy">
+                      <strong>Airtel Money</strong>
+                      <small>Pay from your Airtel Money account</small>
+                    </span>
                   </label>
-                  <label className="payment-option-disabled">
+                  <label className="payment-choice payment-option-disabled">
                     <input type="radio" name="paymentMethod" value="bank_of_kigali" disabled />
-                    Bank of Kigali (USSD details needed)
+                    <span className="payment-choice-mark bank-mark" aria-hidden="true">BK</span>
+                    <span className="payment-choice-copy">
+                      <strong>Bank of Kigali</strong>
+                      <small>Not available yet</small>
+                    </span>
                   </label>
-                  <p>USSD opens on your phone after you place the order. Never enter your PIN on this website.</p>
+                  <p>After placing your order, follow the secure USSD prompt on your phone. Payment is confirmed by the store; never enter your PIN on this website.</p>
                 </fieldset>
                 <button className="primary-button" disabled={busy}>
                   {busy ? "Placing order..." : `Place order · ${money(cartTotal)}`}

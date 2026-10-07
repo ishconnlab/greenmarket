@@ -32,6 +32,7 @@ const orderSchema = new mongoose.Schema(
       enum: ["awaiting_confirmation", "paid"],
       default: "awaiting_confirmation",
     },
+    paymentConfirmedAt: { type: Date, default: null },
   },
   { timestamps: true }
 );

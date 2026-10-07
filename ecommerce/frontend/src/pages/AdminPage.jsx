@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import api from "../api.js";
 import { apiErrorMessage } from "../utils/apiError.js";
 import { money } from "../utils/format.js";
+import { downloadAdminOrderReport } from "../utils/orderPdf.js";
 
 const emptyProduct = {
   slug: "",
@@ -32,10 +33,28 @@ function AdminPage({ onProductsChanged }) {
   const [saving, setSaving] = useState(false);
   const [busyOrder, setBusyOrder] = useState("");
   const [newOrders, setNewOrders] = useState([]);
+  const [reportStartDate, setReportStartDate] = useState("");
+  const [reportEndDate, setReportEndDate] = useState("");
+  const [reportStatus, setReportStatus] = useState("all");
+  const [exportingReport, setExportingReport] = useState(false);
   const [notificationPermission, setNotificationPermission] = useState(
     typeof Notification === "undefined" ? "unsupported" : Notification.permission
   );
   const seenOrderIds = useRef(null);
+  const reportOrders = useMemo(() => {
+    const start = reportStartDate ? new Date(`${reportStartDate}T00:00:00`) : null;
+    const end = reportEndDate ? new Date(`${reportEndDate}T23:59:59.999`) : null;
+    return orders.filter((order) => {
+      const createdAt = new Date(order.createdAt);
+      return (!start || createdAt >= start)
+        && (!end || createdAt <= end)
+        && (reportStatus === "all" || order.status === reportStatus);
+    });
+  }, [orders, reportStartDate, reportEndDate, reportStatus]);
+  const reportPaidTotal = reportOrders
+    .filter((order) => order.paymentStatus === "paid")
+    .reduce((total, order) => total + order.total, 0);
+  const reportOrderValue = reportOrders.reduce((total, order) => total + order.total, 0);
 
   useEffect(() => {
     loadDashboard();
@@ -210,6 +229,24 @@ function AdminPage({ onProductsChanged }) {
     }
   }
 
+  async function exportReport() {
+    setExportingReport(true);
+    setError("");
+    try {
+      await downloadAdminOrderReport(reportOrders, {
+        startDate: reportStartDate,
+        endDate: reportEndDate,
+        status: reportStatus,
+      });
+      setNotice(`Exported a report for ${reportOrders.length} orders.`);
+    } catch (requestError) {
+      console.error("Could not export order report:", requestError);
+      setError("Could not create the order report PDF. Please try again.");
+    } finally {
+      setExportingReport(false);
+    }
+  }
+
   return (
     <main className="admin-page">
       <div className="admin-heading">
@@ -363,6 +400,42 @@ function AdminPage({ onProductsChanged }) {
               ))}
               {!products.length && <div className="empty-state">No products yet. Add your first one above.</div>}
             </div>
+          </section>
+
+          <section className="admin-section">
+            <div className="admin-section-heading">
+              <div>
+                <span className="eyebrow muted-eyebrow">BUSINESS OVERVIEW</span>
+                <h2>Order reports</h2>
+              </div>
+              <span>{reportOrders.length} matching orders</span>
+            </div>
+            <div className="report-filters">
+              <label>
+                From
+                <input type="date" value={reportStartDate} onChange={(event) => setReportStartDate(event.target.value)} />
+              </label>
+              <label>
+                To
+                <input type="date" value={reportEndDate} onChange={(event) => setReportEndDate(event.target.value)} />
+              </label>
+              <label>
+                Order status
+                <select value={reportStatus} onChange={(event) => setReportStatus(event.target.value)}>
+                  <option value="all">All statuses</option>
+                  {statuses.map((status) => <option key={status} value={status}>{status}</option>)}
+                </select>
+              </label>
+              <button className="primary-button report-export-button" onClick={exportReport} disabled={exportingReport}>
+                {exportingReport ? "Creating PDF..." : "Export report PDF"}
+              </button>
+            </div>
+            <div className="report-summary" aria-live="polite">
+              <div><span>Matching orders</span><strong>{reportOrders.length}</strong></div>
+              <div><span>Order value</span><strong>{money(reportOrderValue)}</strong></div>
+              <div><span>Confirmed paid</span><strong>{money(reportPaidTotal)}</strong></div>
+            </div>
+            <p className="report-privacy-note">The PDF includes customer, item, fulfilment, payment, and date details. Its QR code links back to the admin dashboard.</p>
           </section>
 
           <section className="admin-section">

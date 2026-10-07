@@ -6,6 +6,8 @@ import authRoutes from "./routes/authRoutes.js";
 import productRoutes from "./routes/productRoutes.js";
 import cartRoutes from "./routes/cartRoutes.js";
 import orderRoutes from "./routes/orderRoutes.js";
+import notificationRoutes from "./routes/notificationRoutes.js";
+import { initializePushNotifications } from "./services/pushNotifications.js";
 
 dotenv.config();
 
@@ -42,6 +44,7 @@ app.use("/api", authRoutes);
 app.use("/api", productRoutes);
 app.use("/api", cartRoutes);
 app.use("/api", orderRoutes);
+app.use("/api", notificationRoutes);
 
 app.use("/api", (req, res) => {
   return res.status(404).json({ msg: "API route not found" });
@@ -56,6 +59,7 @@ app.use((error, req, res, next) => {
 });
 
 async function startServer() {
+  initializePushNotifications();
   const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI;
   if (!mongoUri) {
     throw new Error("MONGODB_URI or MONGO_URI is required");

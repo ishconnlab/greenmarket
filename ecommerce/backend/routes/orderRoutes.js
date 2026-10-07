@@ -5,10 +5,30 @@ import Product from "../models/Product.js";
 import User from "../models/User.js";
 import requireAuth from "./authMiddleware.js";
 import requireAdmin from "./adminMiddleware.js";
+import { notifyUser } from "../services/pushNotifications.js";
 
 const router = express.Router();
 const orderStatuses = ["pending", "processing", "shipped", "delivered", "cancelled"];
+const statusLabels = {
+  pending: "Pending",
+  processing: "Processing",
+  shipped: "Shipped",
+  delivered: "Delivered",
+  cancelled: "Cancelled",
+};
 router.use("/orders", requireAuth);
+
+function notifyOrderUpdate(userId, order, changes) {
+  const orderCode = order._id.toString().slice(-6).toUpperCase();
+  const notification = {
+    title: "Green Market order update",
+    body: `Order ${orderCode} ${changes.join(" ")}`,
+    url: `/orders?order=${order._id}`,
+  };
+  void notifyUser(userId, notification).catch((error) => {
+    console.error("Could not send order update notification:", error);
+  });
+}
 
 async function releaseStock(items) {
   for (const item of items) {
@@ -65,12 +85,29 @@ router.patch("/admin/orders/:id", requireAuth, requireAdmin, async (req, res) =>
     if (status === "cancelled" && currentOrder.status !== "cancelled") {
       const order = await Order.findOneAndUpdate(
         { _id: currentOrder._id, status: currentOrder.status },
-        { $set: { status: "cancelled", ...(paymentStatus ? { paymentStatus } : {}) } },
+        {
+          $set: {
+            status: "cancelled",
+            ...(paymentStatus !== undefined
+              ? {
+                  paymentStatus,
+                  paymentConfirmedAt: paymentStatus === "paid"
+                    ? currentOrder.paymentConfirmedAt || new Date()
+                    : null,
+                }
+              : {}),
+          },
+        },
         { returnDocument: "after" }
       );
       if (!order) {
         return res.status(409).json({ msg: "Order status changed. Refresh and try again." });
       }
+      const changes = [`status changed to ${statusLabels.cancelled}.`];
+      if (paymentStatus !== undefined && paymentStatus !== currentOrder.paymentStatus) {
+        changes.push(`Payment is now ${paymentStatus === "paid" ? "confirmed" : "awaiting confirmation"}.`);
+      }
+      notifyOrderUpdate(order.user, order, changes);
       try {
         await releaseStock(order.items.map((item) => ({
           productId: item.product,
@@ -90,7 +127,12 @@ router.patch("/admin/orders/:id", requireAuth, requireAdmin, async (req, res) =>
 
     const update = {};
     if (status !== undefined) update.status = status;
-    if (paymentStatus !== undefined) update.paymentStatus = paymentStatus;
+    if (paymentStatus !== undefined) {
+      update.paymentStatus = paymentStatus;
+      if (paymentStatus !== currentOrder.paymentStatus) {
+        update.paymentConfirmedAt = paymentStatus === "paid" ? new Date() : null;
+      }
+    }
     const order = await Order.findOneAndUpdate(
       { _id: currentOrder._id, status: currentOrder.status },
       { $set: update },
@@ -99,6 +141,14 @@ router.patch("/admin/orders/:id", requireAuth, requireAdmin, async (req, res) =>
     if (!order) {
       return res.status(409).json({ msg: "Order changed. Refresh and try again." });
     }
+    const changes = [];
+    if (status !== undefined && status !== currentOrder.status) {
+      changes.push(`status changed to ${statusLabels[status]}.`);
+    }
+    if (paymentStatus !== undefined && paymentStatus !== currentOrder.paymentStatus) {
+      changes.push(`Payment is now ${paymentStatus === "paid" ? "confirmed" : "awaiting confirmation"}.`);
+    }
+    if (changes.length) notifyOrderUpdate(order.user, order, changes);
     return res.status(200).json({ msg: "Order updated", order });
   } catch (error) {
     console.error(error);
@@ -170,6 +220,7 @@ router.post("/orders", async (req, res) => {
       throw error;
     }
 
+    notifyOrderUpdate(order.user, order, ["has been received."]);
     return res.status(201).json({ msg: "Order placed successfully", order });
   } catch (error) {
     console.error(error);

@@ -154,6 +154,37 @@ a { color: inherit; text-decoration: none; }
 .payment-options label { display: flex; align-items: center; gap: 8px; color: #48584d; font-size: 11px; }
 .payment-options .payment-option-disabled { color: #a3aaa2; }
 .payment-options input { accent-color: var(--green); }
+.payment-options .payment-choice {
+  display: flex;
+  min-height: 56px;
+  align-items: center;
+  gap: 10px;
+  padding: 9px;
+  border: 1px solid #e3e8e1;
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+  transition: border-color .15s ease, background .15s ease;
+}
+.payment-options .payment-choice.selected { border-color: #6f9476; background: #f2f6f0; }
+.payment-choice > input { margin: 0 1px 0 0; }
+.payment-choice-mark {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  place-items: center;
+  border-radius: 50%;
+  background: #fff4d8;
+  color: #705719;
+  font-size: 12px;
+  font-weight: 800;
+}
+.airtel-mark { background: #fce9e8; color: #bb3d38; }
+.bank-mark { border-radius: 4px; background: #edf0ed; color: #788178; font-size: 9px; }
+.payment-choice-copy { display: grid; gap: 4px; }
+.payment-choice-copy strong { color: #3a4b3d; font-size: 11px; }
+.payment-choice-copy small { color: #899188; font-size: 9px; font-weight: 400; }
 .payment-options p { margin: 0; color: #818a80; font-size: 9px; line-height: 1.55; }
 .payment-dialog { max-height: min(90vh, 680px); overflow-y: auto; }
 .payment-dialog h2 { margin: 9px 0; font-size: 31px; }
@@ -174,9 +205,31 @@ a { color: inherit; text-decoration: none; }
 .orders-signin { display: block; width: min(100%, 220px); margin: 20px auto 0; }
 .order-list { display: grid; gap: 10px; margin-top: 22px; }
 .order-card { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: 8px; }
+.order-card-heading { align-items: center; }
+.order-card-heading > div { display: grid; gap: 5px; }
+.order-card-heading > div strong { color: #34473a; }
+.receipt-button { flex: 0 0 auto; margin: 0; }
 .order-card > div { display: flex; justify-content: space-between; gap: 14px; color: #34473a; font-size: 12px; }
 .order-card > div span { color: #7d897f; }
 .order-card small { width: fit-content; padding: 4px 8px; border-radius: 20px; background: var(--soft-green); color: var(--green); font-size: 10px; text-transform: capitalize; }
+.order-card small.payment-paid { background: #e8f4e9; color: #2e7040; }
+.order-notification-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px 20px;
+  margin: 0 0 20px;
+  padding: 18px;
+  border: 1px solid #dce6da;
+  border-radius: 4px;
+  background: #f4f7f1;
+}
+.order-notification-panel h2 { margin: 5px 0; color: #34473a; font-family: var(--serif); font-size: 21px; font-weight: 400; }
+.order-notification-panel p { max-width: 560px; margin: 0; color: #788278; font-size: 10px; line-height: 1.6; }
+.order-notification-panel > button { width: auto; }
+.order-notification-panel .notification-status, .order-notification-panel .notification-error { grid-column: 1 / -1; }
+.notification-status { color: #54715a; font-size: 10px; }
+.notification-error { margin: 10px 0; color: #99483e; font-size: 11px; }
 
 @media (max-width: 850px) {
   .hero { min-height: 390px; }
@@ -709,6 +762,30 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .admin-payment-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; color: #667268; font-size: 10px; }
 .admin-payment-row label { display: flex; align-items: center; gap: 8px; }
 .admin-payment-row select { max-width: 170px; padding: 7px; border: 1px solid var(--line); border-radius: 3px; background: white; color: #48584d; font: inherit; }
+.report-filters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(130px, 1fr)) auto;
+  align-items: end;
+  gap: 12px;
+  padding: 16px;
+  background: #f7f8f4;
+}
+.report-filters label { display: grid; gap: 6px; color: #667268; font-size: 10px; font-weight: 600; }
+.report-filters input, .report-filters select {
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid #e0e5de;
+  border-radius: 3px;
+  background: #fff;
+  color: #354238;
+  font: inherit;
+}
+.report-export-button { width: auto; padding: 10px 14px; font-size: 10px; }
+.report-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 14px; }
+.report-summary > div { display: grid; gap: 6px; padding: 13px; border: 1px solid var(--line); }
+.report-summary span { color: #858d83; font-size: 9px; }
+.report-summary strong { color: #344b39; font-size: 14px; }
+.report-privacy-note { margin: 12px 0 0; color: #858d83; font-size: 9px; line-height: 1.5; }
 
 @media (max-width: 650px) {
   .admin-page { width: calc(100% - 32px); padding: 34px 0 56px; }
@@ -729,4 +806,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .admin-order-bottom { align-items: flex-start; flex-direction: column; }
   .admin-payment-row { align-items: flex-start; flex-direction: column; }
   .admin-status-control { min-width: 112px; font-size: 9px; }
+  .report-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 12px; }
+  .report-filters .report-export-button { grid-column: 1 / -1; width: 100%; }
+  .report-summary { grid-template-columns: 1fr; }
+  .order-notification-panel { grid-template-columns: 1fr; }
+  .order-notification-panel > button { width: 100%; }
+  .order-card-heading { align-items: flex-start !important; flex-direction: column; }
+  .receipt-button { width: fit-content; }
 }

@@ -18,3 +18,9 @@ services:
         generateValue: true
       - key: CORS_ORIGIN
         value: https://greenmarket-livid.vercel.app
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        sync: false
