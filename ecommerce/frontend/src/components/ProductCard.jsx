@@ -3,7 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { money } from "../utils/format.js";
 import { useLanguage } from "../context/LanguageContext.jsx";
 
-function ProductCard({ product, index, isFavorite, onToggleFavorite, onAddToCart, autoOpenDetails = false }) {
+function ProductCard({ product, index, isFavorite, onToggleFavorite, onAddToCart, onNotice, autoOpenDetails = false }) {
   const { t } = useLanguage();
   const { pathname } = useLocation();
   const inStock = product.stock > 0;
@@ -23,6 +23,16 @@ function ProductCard({ product, index, isFavorite, onToggleFavorite, onAddToCart
   useEffect(() => {
     if (autoOpenDetails) setDetailsOpen(true);
   }, [autoOpenDetails]);
+
+  function openProductDetails() {
+    setDetailsOpen(true);
+    onNotice?.(t("Viewing {name} details.", { name: product.name }));
+  }
+
+  function toggleProductFavorite() {
+    onToggleFavorite(product._id);
+    onNotice?.(t(isFavorite ? "Removed {name} from favorites." : "Added {name} to favorites.", { name: product.name }));
+  }
 
   const storefrontOrigin = import.meta.env.VITE_STOREFRONT_URL || "https://greenmarket-livid.vercel.app";
   const shareUrl = new URL(`/share/products/${product._id}`, storefrontOrigin).href;
@@ -52,6 +62,7 @@ function ProductCard({ product, index, isFavorite, onToggleFavorite, onAddToCart
                 const files = [file];
                 if (navigator.canShare({ files })) {
                   await navigator.share({ title: product.name, text: shareText, files });
+                  onNotice?.(t("Product shared."));
                   return;
                 }
               }
@@ -61,6 +72,7 @@ function ProductCard({ product, index, isFavorite, onToggleFavorite, onAddToCart
           }
         }
         await navigator.share({ title: product.name, text: shareText, url: shareUrl });
+        onNotice?.(t("Product shared."));
         return;
       } catch (shareError) {
         if (shareError.name === "AbortError") return;
@@ -71,15 +83,25 @@ function ProductCard({ product, index, isFavorite, onToggleFavorite, onAddToCart
     try {
       await navigator.clipboard.writeText(shareText);
       setShareNotice(t("Product link copied. Paste it into Instagram to share."));
+      onNotice?.(t("Product link copied. Paste it into Instagram to share."));
     } catch (clipboardError) {
       console.error("Could not copy product share link:", clipboardError);
       setShareNotice(t("Copy the product link to share it on Instagram."));
+      onNotice?.(t("Copy the product link to share it on Instagram."));
     }
   }
 
   return (
     <article className="product-card" style={{ "--card-index": index }}>
       <div className={`product-image-wrap product-art-${index % 4}`}>
+        <button
+          type="button"
+          className="product-detail-image-trigger"
+          onClick={openProductDetails}
+          aria-label={`${t("View product details")}: ${product.name}`}
+        >
+          <span>{t("View product details")} ↗</span>
+        </button>
         {product.imageUrl && (
           <img
             className="product-image"
@@ -99,7 +121,7 @@ function ProductCard({ product, index, isFavorite, onToggleFavorite, onAddToCart
         )}
         <button
           className={`favorite-button ${isFavorite ? "is-favorite" : ""}`}
-          onClick={() => onToggleFavorite(product._id)}
+          onClick={toggleProductFavorite}
           aria-label={t(isFavorite ? "Remove {name} from favorites" : "Add {name} to favorites", { name: product.name })}
           aria-pressed={isFavorite}
         >
@@ -130,7 +152,7 @@ function ProductCard({ product, index, isFavorite, onToggleFavorite, onAddToCart
           )}
           <p>{product.description || t("Product details coming soon.")}</p>
         </div>
-        <button className="product-details-button" onClick={() => setDetailsOpen(true)}>
+        <button className="product-details-button" onClick={openProductDetails}>
           {t("View product details")} <span aria-hidden="true">↗</span>
         </button>
         <div className="product-buy">
@@ -162,63 +184,78 @@ function ProductCard({ product, index, isFavorite, onToggleFavorite, onAddToCart
             >
               ×
             </button>
-            {product.imageUrl && (
-              <img
-                className="product-detail-image"
-                src={product.imageUrl}
-                alt={product.imageAlt || product.name}
-              />
-            )}
-            <span className="product-detail-category">{t(product.category || "Everyday")}</span>
-            <h2 id={`product-title-${product._id}`}>{product.name}</h2>
-            {product.store?.slug && (
-              <Link className="product-store-attribution product-detail-store" to={`/store/${product.store.slug}`}>
-                {t("Visit {store}", { store: product.store.name })}
-              </Link>
-            )}
-            <p className="product-detail-description">
-              {product.description || t("Product details coming soon.")}
-            </p>
-            <div className="product-detail-facts">
-              <div><span>{t("Price")}</span><strong>{money(product.price)}</strong></div>
-              <div>
-                <span>{t("Availability")}</span>
-                <strong className={inStock ? "product-detail-available" : "product-detail-unavailable"}>
-                  {t(inStock ? "In stock" : "Sold out")}
-                </strong>
+            <div className="product-detail-layout">
+              <div className="product-detail-media">
+                {product.imageUrl ? (
+                  <img
+                    className="product-detail-image"
+                    src={product.imageUrl}
+                    alt={product.imageAlt || product.name}
+                  />
+                ) : (
+                  <div className="product-detail-image-placeholder" aria-hidden="true">
+                    {product.name.trim().charAt(0).toUpperCase()}
+                  </div>
+                )}
+              </div>
+              <div className="product-detail-content">
+                <span className="product-detail-category">{t(product.category || "Everyday")}</span>
+                <h2 id={`product-title-${product._id}`}>{product.name}</h2>
+                {product.store?.slug && (
+                  <Link className="product-store-attribution product-detail-store" to={`/store/${product.store.slug}`}>
+                    {t("Visit {store}", { store: product.store.name })}
+                  </Link>
+                )}
+                <p className="product-detail-description">
+                  {product.description || t("Product details coming soon.")}
+                </p>
+                <div className="product-detail-facts">
+                  <div>
+                    <span>{t("Availability")}</span>
+                    <strong className={inStock ? "product-detail-available" : "product-detail-unavailable"}>
+                      {t(inStock ? "In stock" : "Sold out")}
+                    </strong>
+                  </div>
+                </div>
+                <div className="product-share">
+                  <span className="product-share-label">{t("Share this product")}</span>
+                  <div className="product-share-actions">
+                    <a className="product-share-button whatsapp-share" href={whatsappUrl} target="_blank" rel="noopener noreferrer" onClick={() => onNotice?.(t("Opening WhatsApp share."))}>
+                      <span aria-hidden="true">↗</span> WhatsApp
+                    </a>
+                    <a className="product-share-button facebook-share" href={facebookUrl} target="_blank" rel="noopener noreferrer" onClick={() => onNotice?.(t("Opening Facebook share."))}>
+                      <span aria-hidden="true">f</span> Facebook
+                    </a>
+                    <button className="product-share-button instagram-share" onClick={shareToInstagram}>
+                      <span aria-hidden="true">◎</span> Instagram
+                    </button>
+                  </div>
+                  {shareNotice && <p className="product-share-notice" role="status">{shareNotice}</p>}
+                </div>
               </div>
             </div>
-            <div className="product-share">
-              <span className="product-share-label">{t("Share this product")}</span>
-              <div className="product-share-actions">
-                <a className="product-share-button whatsapp-share" href={whatsappUrl} target="_blank" rel="noopener noreferrer">
-                  <span aria-hidden="true">↗</span> WhatsApp
-                </a>
-                <a className="product-share-button facebook-share" href={facebookUrl} target="_blank" rel="noopener noreferrer">
-                  <span aria-hidden="true">f</span> Facebook
-                </a>
-                <button className="product-share-button instagram-share" onClick={shareToInstagram}>
-                  <span aria-hidden="true">◎</span> Instagram
+            <div className="product-detail-purchase">
+              <div className="product-detail-purchase-price">
+                <span>{t("Price")}</span>
+                <strong>{money(product.price)}</strong>
+              </div>
+              {needsStoreVisit ? (
+                <Link className="primary-button product-detail-add product-detail-store-link" to={storePath} onClick={() => setDetailsOpen(false)}>
+                  {t("Visit store")}
+                </Link>
+              ) : (
+                <button
+                  className="primary-button product-detail-add"
+                  onClick={() => {
+                    onAddToCart(product);
+                    setDetailsOpen(false);
+                  }}
+                  disabled={!inStock}
+                >
+                  {t(inStock ? "Add to bag" : "Sold out")}
                 </button>
-              </div>
-              {shareNotice && <p className="product-share-notice" role="status">{shareNotice}</p>}
+              )}
             </div>
-            {needsStoreVisit ? (
-              <Link className="primary-button product-detail-add product-detail-store-link" to={storePath} onClick={() => setDetailsOpen(false)}>
-                {t("Visit store")}
-              </Link>
-            ) : (
-              <button
-                className="primary-button product-detail-add"
-                onClick={() => {
-                  onAddToCart(product);
-                  setDetailsOpen(false);
-                }}
-                disabled={!inStock}
-              >
-                {t(inStock ? "Add to bag" : "Sold out")}
-              </button>
-            )}
           </section>
         </div>
       )}

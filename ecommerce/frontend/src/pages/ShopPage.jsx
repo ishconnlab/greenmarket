@@ -4,7 +4,7 @@ import Hero from "../components/Hero.jsx";
 import ProductCard from "../components/ProductCard.jsx";
 import { useLanguage } from "../context/LanguageContext.jsx";
 
-function ShopPage({ products, loading, error, onRetry, onAddToCart }) {
+function ShopPage({ products, loading, error, onRetry, onAddToCart, onNotice }) {
   const { t } = useLanguage();
   const [searchParams] = useSearchParams();
   const sharedProductId = searchParams.get("product");
@@ -148,6 +148,7 @@ function ShopPage({ products, loading, error, onRetry, onAddToCart }) {
                   isFavorite={favorites.includes(product._id)}
                   onToggleFavorite={toggleFavorite}
                   onAddToCart={onAddToCart}
+                  onNotice={onNotice}
                   autoOpenDetails={
                     Boolean(sharedProductId)
                     && (product._id === sharedProductId || product.slug === sharedProductId)

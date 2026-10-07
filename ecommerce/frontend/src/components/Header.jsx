@@ -55,7 +55,6 @@ function Header({ user, isAdmin, isSeller, store, cartCount, onOpenCart, onSignI
   const { pathname, search } = useLocation();
   const storeSlug = pathname.match(/^\/store\/([^/]+)/)?.[1] || "";
   const showingStore = Boolean(store && store.slug === storeSlug);
-  const showMarketTicker = pathname !== "/admin";
   const [installPrompt, setInstallPrompt] = useState(null);
   const [installStatus, setInstallStatus] = useState("");
   const installScope = useRef("");
@@ -263,7 +262,7 @@ function Header({ user, isAdmin, isSeller, store, cartCount, onOpenCart, onSignI
         </nav>
       </div>
       {installStatus && <p className="install-status" role="status">{installStatus}</p>}
-      {showMarketTicker && promotions.length > 0 && (
+      {promotions.length > 0 && (
         <section className="market-ticker" aria-label={t("Green Market promotions")}>
           <div className="market-ticker-label">
             <span className="market-live-dot" aria-hidden="true" />
@@ -278,7 +277,7 @@ function Header({ user, isAdmin, isSeller, store, cartCount, onOpenCart, onSignI
           </div>
         </section>
       )}
-      {showMarketTicker && promotionRequestFailed && (
+      {promotionRequestFailed && (
         <p className="sr-only" role="status">{t("Promotions could not be loaded.")}</p>
       )}
     </header>

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import api from "../api.js";
 import { apiErrorMessage } from "../utils/apiError.js";
 import { money } from "../utils/format.js";
@@ -631,6 +632,7 @@ function AdminPage({ onProductsChanged }) {
           <a href="#order-reports"><span className="admin-nav-icon" aria-hidden="true">▤</span>{t("Reports")}</a>
           <a href="#order-management"><span className="admin-nav-icon" aria-hidden="true">≡</span>{t("Orders")}<span className="admin-nav-count">{openOrderCount}</span></a>
         </nav>
+        <Link className="admin-seller-link" to="/seller">{t("Sell with us")}<span aria-hidden="true">↗</span></Link>
         <div className="admin-sidebar-footnote">
           <span className="admin-live-dot" aria-hidden="true" />
           <span>{t("Store systems are ready")}</span>

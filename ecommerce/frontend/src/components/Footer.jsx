@@ -11,13 +11,11 @@ function Footer() {
             <span className="brand-mark">g</span>
             <span>green<span className="brand-light">market</span></span>
           </Link>
-          <p>{t("Good fruit, useful things, and a few small upgrades for everyday life.")}</p>
         </div>
         <div className="footer-column">
           <h2>{t("Explore")}</h2>
           <Link to="/#shop">{t("Shop everything")}</Link>
           <Link to="/orders">{t("Your orders")}</Link>
-          <Link to="/profile">{t("Your profile & support")}</Link>
           <Link to="/help">{t("Help centre")}</Link>
           <Link to="/seller">{t("Sell with us")}</Link>
         </div>
@@ -35,11 +33,9 @@ function Footer() {
           <Link to="/privacy">{t("Privacy")}</Link>
           <Link to="/profile#contact">{t("Contact us")}</Link>
         </div>
-        <p className="footer-signoff">{t("A good find can make an ordinary day.")}</p>
       </div>
       <div className="footer-bottom">
         <span>© {new Date().getFullYear()} Green Market</span>
-        <span>{t("Thoughtfully picked. Ready for real life.")}</span>
         <span>{t("Powered by")} <a href="mailto:ishconnlab@gmail.com">Ishconnect</a></span>
       </div>
     </footer>

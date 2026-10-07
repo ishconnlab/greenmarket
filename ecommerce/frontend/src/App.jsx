@@ -369,6 +369,7 @@ function App() {
               error={productsError}
               onRetry={loadProducts}
               onAddToCart={addToCart}
+              onNotice={showNotice}
             />
           }
         />
@@ -384,7 +385,7 @@ function App() {
         <Route path="/guide" element={<InfoPage page="guide" />} />
         <Route path="/policies" element={<InfoPage page="policies" />} />
         <Route path="/privacy" element={<InfoPage page="privacy" />} />
-        <Route path="/store/:slug" element={<StorefrontPage onStoreLoaded={setActiveStore} onAddToCart={addToCart} />} />
+        <Route path="/store/:slug" element={<StorefrontPage onStoreLoaded={setActiveStore} onAddToCart={addToCart} onNotice={showNotice} />} />
         <Route path="/seller" element={<SellerDashboardPage user={user} onSignIn={() => setAuthMode("login")} />} />
         <Route
           path="/admin"
@@ -399,7 +400,7 @@ function App() {
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
       <Footer />
-      <nav className={`mobile-tab-bar${user && (user.role === "admin" || user.role === "seller") ? " mobile-tab-bar-wide" : ""}`} aria-label={t("App navigation")}>
+      <nav className={`mobile-tab-bar${user && (user.role === "admin" || user.role === "seller") ? " mobile-tab-bar-wide" : ""}${user?.role === "admin" ? " mobile-tab-bar-admin" : ""}`} aria-label={t("App navigation")}>
         <NavLink to="/" end aria-label={t("Shop")}>
           <span className="mobile-tab-icon"><AppNavIcon name="shop" /></span>
           <span>{t("Shop")}</span>
@@ -428,10 +429,10 @@ function App() {
             <span>{t("Admin")}</span>
           </NavLink>
         )}
-        {user?.role === "seller" && (
-          <NavLink to="/seller" aria-label={t("My store")}>
+        {(user?.role === "seller" || user?.role === "admin") && (
+          <NavLink to="/seller" aria-label={t(user.role === "seller" ? "My store" : "Sell with us")}>
             <span className="mobile-tab-icon"><AppNavIcon name="seller" /></span>
-            <span>{t("My store")}</span>
+            <span>{t(user.role === "seller" ? "My store" : "Sell with us")}</span>
           </NavLink>
         )}
         {user ? (
@@ -446,7 +447,7 @@ function App() {
           </button>
         )}
       </nav>
-      {notice && <Toast message={notice} />}
+      {notice && <Toast key={notice} message={notice} />}
       {authMode && (
         <AuthDialog
           mode={authMode}

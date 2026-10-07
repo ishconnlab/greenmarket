@@ -6,7 +6,7 @@ import BrandedLoader from "../components/BrandedLoader.jsx";
 import { useLanguage } from "../context/LanguageContext.jsx";
 import { apiErrorMessage } from "../utils/apiError.js";
 
-function StorefrontPage({ onStoreLoaded, onAddToCart }) {
+function StorefrontPage({ onStoreLoaded, onAddToCart, onNotice }) {
   const { slug } = useParams();
   const [searchParams] = useSearchParams();
   const sharedProductId = searchParams.get("product");
@@ -15,6 +15,23 @@ function StorefrontPage({ onStoreLoaded, onAddToCart }) {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [favorites, setFavorites] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("green-market-favorites")) || [];
+    } catch {
+      return [];
+    }
+  });
+
+  function toggleFavorite(productId) {
+    setFavorites((current) => {
+      const updated = current.includes(productId)
+        ? current.filter((id) => id !== productId)
+        : [...current, productId];
+      localStorage.setItem("green-market-favorites", JSON.stringify(updated));
+      return updated;
+    });
+  }
 
   useEffect(() => {
     let active = true;
@@ -97,9 +114,10 @@ function StorefrontPage({ onStoreLoaded, onAddToCart }) {
                 key={product._id}
                 product={{ ...product, store: { name: store.name, slug: store.slug } }}
                 index={index}
-                isFavorite={false}
-                onToggleFavorite={() => {}}
+                isFavorite={favorites.includes(product._id)}
+                onToggleFavorite={toggleFavorite}
                 onAddToCart={onAddToCart}
+                onNotice={onNotice}
                 autoOpenDetails={product._id === sharedProductId || product.slug === sharedProductId}
               />
             ))}
